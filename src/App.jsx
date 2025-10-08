@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, Edit2, CheckCircle, AlertCircle, XCircle, Users, MessageSquare, ChevronDown, ChevronRight, Download, Save, LogOut, Bell } from 'lucide-react';
+import { Plus, Edit2, CheckCircle, AlertCircle, XCircle, MessageSquare, ChevronDown, ChevronRight, Download, Save, LogOut, Bell } from 'lucide-react';
 import * as supabaseService from './supabase/supabaseService';
 import * as authService from './supabase/authService';
 import LoginPage from './components/LoginPage';
@@ -218,7 +218,8 @@ const DeliveryManagerDashboard = () => {
   const [filterStatus, setFilterStatus] = useState('All');
   const [selectedWeek, setSelectedWeek] = useState(null);
   const [showEditWeekModal, setShowEditWeekModal] = useState(false);
-  const [editWeekData, setEditWeekData] = useState({ accountId: null, week: null, status: 'healthy', people: 0 });
+  const [editWeekData, setEditWeekData] = useState({ accountId: null, week: null, status: 'healthy', people: 0, notes: '' });
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
   const weeks = useMemo(() => {
     if (viewMode === 'quarter') {
@@ -290,6 +291,32 @@ const DeliveryManagerDashboard = () => {
       return managerMatch && statusMatch;
     });
   }, [enrichedAccounts, filterManager, filterStatus, selectedWeek, statuses]);
+
+  const sortedAccounts = useMemo(() => {
+    if (!sortConfig.key) return filteredAccounts;
+
+    return [...filteredAccounts].sort((a, b) => {
+      let aVal = a[sortConfig.key];
+      let bVal = b[sortConfig.key];
+
+      if (typeof aVal === 'string') {
+        aVal = aVal.toLowerCase();
+        bVal = bVal ? bVal.toLowerCase() : '';
+      }
+
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [filteredAccounts, sortConfig]);
+
+  const handleSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
 
   const summaryStats = useMemo(() => {
     if (!selectedWeek) return { total: 0, healthy: 0, attention: 0, critical: 0, totalPeople: 0, pendingActions: 0 };
@@ -380,19 +407,19 @@ const DeliveryManagerDashboard = () => {
     }
   };
 
-  const handleUpdateWeekStatus = async (accountId, week, status, people) => {
-    await supabaseService.updateWeeklyStatus(accountId, week, status, people);
+  const handleUpdateWeekStatus = async (accountId, week, status, people, notes = '') => {
+    await supabaseService.updateWeeklyStatus(accountId, week, status, people, notes);
     await refreshData();
   };
 
   const handleSaveWeekEdit = async () => {
-    await handleUpdateWeekStatus(editWeekData.accountId, editWeekData.week, editWeekData.status, editWeekData.people);
+    await handleUpdateWeekStatus(editWeekData.accountId, editWeekData.week, editWeekData.status, editWeekData.people, editWeekData.notes);
     setShowEditWeekModal(false);
   };
 
   const openEditWeekModal = (accountId, week) => {
     const weekData = getStatusForWeek(accountId, week);
-    setEditWeekData({ accountId, week, status: weekData.status, people: weekData.people });
+    setEditWeekData({ accountId, week, status: weekData.status, people: weekData.people, notes: weekData.notes || '' });
     setShowEditWeekModal(true);
   };
 
@@ -644,9 +671,28 @@ const DeliveryManagerDashboard = () => {
             <table className="w-full">
               <thead className="bg-gray-800 text-white sticky top-0 z-10">
                 <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold sticky left-0 bg-gray-800 z-20">Manager</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold sticky left-[120px] bg-gray-800 z-20">Account</th>
-                  <th className="px-4 py-3 text-center text-sm font-semibold sticky left-[280px] bg-gray-800 z-20">People</th>
+                  <th
+                    onClick={() => handleSort('managerName')}
+                    className="px-4 py-3 text-left text-sm font-semibold sticky left-0 bg-gray-800 z-20 cursor-pointer hover:bg-gray-700 select-none"
+                  >
+                    <div className="flex items-center gap-2">
+                      Manager
+                      {sortConfig.key === 'managerName' && (
+                        <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => handleSort('name')}
+                    className="px-4 py-3 text-left text-sm font-semibold sticky left-[120px] bg-gray-800 z-20 cursor-pointer hover:bg-gray-700 select-none"
+                  >
+                    <div className="flex items-center gap-2">
+                      Account
+                      {sortConfig.key === 'name' && (
+                        <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                      )}
+                    </div>
+                  </th>
                   {viewMode === 'quarter' ? (
                     // Quarterly view with month headers
                     monthsGrouped.map(monthData => (
@@ -678,7 +724,6 @@ const DeliveryManagerDashboard = () => {
                   <tr>
                     <th className="sticky left-0 bg-gray-800 z-20"></th>
                     <th className="sticky left-[120px] bg-gray-800 z-20"></th>
-                    <th className="sticky left-[280px] bg-gray-800 z-20"></th>
                     {monthsGrouped.map(monthData => (
                       <React.Fragment key={`weeks-${monthData.month}`}>
                         {!collapsedMonths[monthData.month] ? (
@@ -697,7 +742,7 @@ const DeliveryManagerDashboard = () => {
                 )}
               </thead>
               <tbody>
-                {filteredAccounts.map((account, idx) => (
+                {sortedAccounts.map((account, idx) => (
                   <React.Fragment key={account.id}>
                     <tr className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} border-b hover:bg-gray-100 ${hasNotifications(account.id) ? 'border-l-4 border-l-orange-500' : ''}`}>
                       <td className="px-4 py-3 text-sm font-medium text-gray-900 sticky left-0 bg-inherit z-10">{account.managerName}</td>
@@ -714,9 +759,6 @@ const DeliveryManagerDashboard = () => {
                             <Edit2 className="w-3 h-3" />
                           </button>
                         </div>
-                      </td>
-                      <td className="px-4 py-3 text-center sticky left-[280px] bg-inherit z-10">
-                        <span className="inline-flex items-center gap-1 text-sm text-gray-700"><Users className="w-4 h-4" />{account.people}</span>
                       </td>
                       {viewMode === 'quarter' ? (
                         // Quarterly view with collapsible months
@@ -978,6 +1020,16 @@ const DeliveryManagerDashboard = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Number of People</label>
                   <input type="number" min="0" value={editWeekData.people} onChange={(e) => setEditWeekData({...editWeekData, people: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                  <textarea
+                    value={editWeekData.notes}
+                    onChange={(e) => setEditWeekData({...editWeekData, notes: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    rows="3"
+                    placeholder="Add any notes for this week..."
+                  />
                 </div>
               </div>
               <div className="flex gap-2 mt-6">

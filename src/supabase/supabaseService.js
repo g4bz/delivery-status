@@ -52,6 +52,8 @@ export const getAccounts = async () => {
       name: account.name,
       managerId: account.manager_id,
       people: account.people,
+      languageStack: account.language_stack || [],
+      primaryLanguage: account.primary_language,
       satisfactionScore: {
         Q1: account.satisfaction_score_q1,
         Q2: account.satisfaction_score_q2,
@@ -196,7 +198,8 @@ export const getWeeklyStatuses = async () => {
       accountId: status.account_id,
       week: status.week,
       status: status.status,
-      people: status.people
+      people: status.people,
+      notes: status.notes || ''
     }));
   } catch (error) {
     console.error('Error fetching weekly statuses:', error);
@@ -204,7 +207,7 @@ export const getWeeklyStatuses = async () => {
   }
 };
 
-export const updateWeeklyStatus = async (accountId, week, status, people) => {
+export const updateWeeklyStatus = async (accountId, week, status, people, notes = '') => {
   try {
     // Check if status exists
     const { data: existing } = await supabase
@@ -218,7 +221,7 @@ export const updateWeeklyStatus = async (accountId, week, status, people) => {
       // Update existing status
       const { error } = await supabase
         .from('weekly_statuses')
-        .update({ status, people })
+        .update({ status, people, notes })
         .eq('account_id', accountId)
         .eq('week', week);
 
@@ -231,7 +234,8 @@ export const updateWeeklyStatus = async (accountId, week, status, people) => {
           account_id: accountId,
           week,
           status,
-          people
+          people,
+          notes
         }]);
 
       if (error) throw error;
@@ -345,6 +349,154 @@ export const updateActionItem = async (id, updates) => {
     };
   } catch (error) {
     console.error('Error updating action item:', error);
+    throw error;
+  }
+};
+
+// ============================================================================
+// SATISFACTION SCORES
+// ============================================================================
+export const getSatisfactionScores = async (accountId = null) => {
+  try {
+    let query = supabase
+      .from('satisfaction_scores')
+      .select('*')
+      .order('year', { ascending: true })
+      .order('quarter', { ascending: true });
+
+    if (accountId) {
+      query = query.eq('account_id', accountId);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return data.map(score => ({
+      id: score.id,
+      accountId: score.account_id,
+      year: score.year,
+      quarter: score.quarter,
+      score: score.score,
+      comments: score.comments || ''
+    }));
+  } catch (error) {
+    console.error('Error fetching satisfaction scores:', error);
+    throw error;
+  }
+};
+
+export const upsertSatisfactionScore = async (accountId, year, quarter, score, comments = '') => {
+  try {
+    const { data, error } = await supabase
+      .from('satisfaction_scores')
+      .upsert({
+        account_id: accountId,
+        year,
+        quarter,
+        score,
+        comments
+      }, { onConflict: 'account_id,year,quarter' })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return {
+      id: data.id,
+      accountId: data.account_id,
+      year: data.year,
+      quarter: data.quarter,
+      score: data.score,
+      comments: data.comments || ''
+    };
+  } catch (error) {
+    console.error('Error upserting satisfaction score:', error);
+    throw error;
+  }
+};
+
+export const getYearlyAverages = async (accountId) => {
+  try {
+    const scores = await getSatisfactionScores(accountId);
+    const yearlyData = {};
+
+    scores.forEach(score => {
+      if (!yearlyData[score.year]) {
+        yearlyData[score.year] = { total: 0, count: 0, quarters: {} };
+      }
+      yearlyData[score.year].total += score.score;
+      yearlyData[score.year].count += 1;
+      yearlyData[score.year].quarters[`Q${score.quarter}`] = score.score;
+    });
+
+    return Object.keys(yearlyData).map(year => ({
+      year: parseInt(year),
+      average: yearlyData[year].count > 0 ? (yearlyData[year].total / yearlyData[year].count).toFixed(1) : 0,
+      quarters: yearlyData[year].quarters
+    }));
+  } catch (error) {
+    console.error('Error calculating yearly averages:', error);
+    throw error;
+  }
+};
+
+// ============================================================================
+// ACCOUNT BILLING
+// ============================================================================
+export const getAccountBilling = async (accountId = null) => {
+  try {
+    let query = supabase
+      .from('account_billing')
+      .select('*')
+      .order('billing_month', { ascending: false });
+
+    if (accountId) {
+      query = query.eq('account_id', accountId);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return data.map(billing => ({
+      id: billing.id,
+      accountId: billing.account_id,
+      billingMonth: billing.billing_month,
+      billedAmount: parseFloat(billing.billed_amount),
+      currency: billing.currency,
+      notes: billing.notes || ''
+    }));
+  } catch (error) {
+    console.error('Error fetching account billing:', error);
+    throw error;
+  }
+};
+
+export const upsertBilling = async (accountId, billingMonth, amount, currency = 'USD', notes = '') => {
+  try {
+    const { data, error } = await supabase
+      .from('account_billing')
+      .upsert({
+        account_id: accountId,
+        billing_month: billingMonth,
+        billed_amount: amount,
+        currency,
+        notes
+      }, { onConflict: 'account_id,billing_month' })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return {
+      id: data.id,
+      accountId: data.account_id,
+      billingMonth: data.billing_month,
+      billedAmount: parseFloat(data.billed_amount),
+      currency: data.currency,
+      notes: data.notes || ''
+    };
+  } catch (error) {
+    console.error('Error upserting billing:', error);
     throw error;
   }
 };
