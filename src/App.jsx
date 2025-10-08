@@ -1,0 +1,995 @@
+import React, { useState, useMemo, useEffect } from 'react';
+import { Plus, Edit2, CheckCircle, AlertCircle, XCircle, Users, MessageSquare, ChevronDown, ChevronRight, Download, Save, LogOut, Bell } from 'lucide-react';
+import * as supabaseService from './supabase/supabaseService';
+import * as authService from './supabase/authService';
+import LoginPage from './components/LoginPage';
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+const CONSTANTS = {
+  STATUS: {
+    HEALTHY: 'healthy',
+    ATTENTION: 'attention',
+    CRITICAL: 'critical'
+  },
+  PRIORITY: {
+    LOW: 'low',
+    MEDIUM: 'medium',
+    HIGH: 'high'
+  },
+  VIEW_MODE: {
+    MONTH: 'month',
+    QUARTER: 'quarter'
+  },
+  QUARTERS: ['Q1', 'Q2', 'Q3', 'Q4']
+};
+
+// ============================================================================
+// UTILITIES
+// ============================================================================
+const dateUtils = {
+  getCurrentMonday() {
+    const today = new Date();
+    const day = today.getDay();
+    const diff = today.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
+    const monday = new Date(today.setDate(diff));
+    return monday.toISOString().split('T')[0];
+  },
+
+  getCurrentMonth() {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  },
+
+  getCurrentQuarter() {
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const quarter = Math.ceil(month / 3);
+    return `Q${quarter}-${now.getFullYear()}`;
+  },
+
+  generateWeeksForMonth(monthStr) {
+    const [year, month] = monthStr.split('-').map(Number);
+    const firstDay = new Date(year, month - 1, 1);
+    const lastDay = new Date(year, month, 0);
+    const weeks = [];
+    let currentMonday = new Date(firstDay);
+
+    while (currentMonday.getDay() !== 1) {
+      currentMonday.setDate(currentMonday.getDate() + 1);
+    }
+
+    while (currentMonday <= lastDay) {
+      weeks.push(currentMonday.toISOString().split('T')[0]);
+      currentMonday.setDate(currentMonday.getDate() + 7);
+    }
+
+    return weeks;
+  },
+
+  generateWeeksForQuarterGrouped(quarterStr) {
+    const [quarter, year] = quarterStr.split('-');
+    const yearNum = parseInt(year);
+    let startMonth, endMonth;
+
+    switch(quarter) {
+      case 'Q1': startMonth = 1; endMonth = 3; break;
+      case 'Q2': startMonth = 4; endMonth = 6; break;
+      case 'Q3': startMonth = 7; endMonth = 9; break;
+      case 'Q4': startMonth = 10; endMonth = 12; break;
+      default: startMonth = 1; endMonth = 3;
+    }
+
+    const monthsData = [];
+    for (let month = startMonth; month <= endMonth; month++) {
+      const monthStr = `${yearNum}-${month.toString().padStart(2, '0')}`;
+      const weeks = this.generateWeeksForMonth(monthStr);
+      monthsData.push({
+        month: monthStr,
+        monthName: new Date(yearNum, month - 1, 1).toLocaleDateString('en-US', { month: 'long' }),
+        weeks
+      });
+    }
+
+    return monthsData;
+  },
+
+  generateWeeksForQuarter(quarterStr) {
+    const [quarter, year] = quarterStr.split('-');
+    const yearNum = parseInt(year);
+    let startMonth, endMonth;
+
+    switch(quarter) {
+      case 'Q1': startMonth = 1; endMonth = 3; break;
+      case 'Q2': startMonth = 4; endMonth = 6; break;
+      case 'Q3': startMonth = 7; endMonth = 9; break;
+      case 'Q4': startMonth = 10; endMonth = 12; break;
+      default: startMonth = 1; endMonth = 3;
+    }
+
+    const weeks = [];
+    for (let month = startMonth; month <= endMonth; month++) {
+      const monthStr = `${yearNum}-${month.toString().padStart(2, '0')}`;
+      weeks.push(...this.generateWeeksForMonth(monthStr));
+    }
+
+    return weeks;
+  },
+
+  getMonthFromWeek(weekStr) {
+    const date = new Date(weekStr);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  },
+
+  formatWeekDisplay(weekStr) {
+    return new Date(weekStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  },
+
+  isCurrentMonth(monthStr) {
+    return monthStr === this.getCurrentMonth();
+  },
+
+  isPastMonth(monthStr) {
+    return monthStr < this.getCurrentMonth();
+  }
+};
+
+const statusUtils = {
+  getStatusColor(status) {
+    const colors = {
+      healthy: 'bg-green-400',
+      attention: 'bg-yellow-400',
+      critical: 'bg-red-500'
+    };
+    return colors[status] || 'bg-gray-200';
+  },
+
+  getStatusIcon(status) {
+    const icons = {
+      healthy: <CheckCircle className="w-4 h-4 text-green-700" />,
+      attention: <AlertCircle className="w-4 h-4 text-yellow-700" />,
+      critical: <XCircle className="w-4 h-4 text-red-700" />
+    };
+    return icons[status] || null;
+  },
+
+  cycleStatus(currentStatus) {
+    const cycle = { healthy: 'attention', attention: 'critical', critical: 'healthy' };
+    return cycle[currentStatus] || 'healthy';
+  }
+};
+
+// Static data removed - now using Supabase PostgreSQL database
+
+// ============================================================================
+// CUSTOM HOOKS
+// ============================================================================
+const useData = () => {
+  const [managers, setManagers] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [statuses, setStatuses] = useState([]);
+  const [actionItems, setActionItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const [managersData, accountsData, statusesData, itemsData] = await Promise.all([
+        supabaseService.getManagers(),
+        supabaseService.getAccounts(),
+        supabaseService.getWeeklyStatuses(),
+        supabaseService.getActionItems()
+      ]);
+
+      setManagers(managersData);
+      setAccounts(accountsData);
+      setStatuses(statusesData);
+      setActionItems(itemsData);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { managers, accounts, statuses, actionItems, loading, refreshData: loadData };
+};
+
+// ============================================================================
+// MAIN APPLICATION COMPONENT
+// ============================================================================
+const DeliveryManagerDashboard = () => {
+  const { managers, accounts, statuses, actionItems, loading, refreshData } = useData();
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
+
+  const [currentMonth, setCurrentMonth] = useState(dateUtils.getCurrentMonth());
+  const [viewMode, setViewMode] = useState('month');
+  const [selectedQuarter, setSelectedQuarter] = useState(dateUtils.getCurrentQuarter());
+  const [expandedAccounts, setExpandedAccounts] = useState({});
+  const [collapsedMonths, setCollapsedMonths] = useState({});
+  const [showModal, setShowModal] = useState(null);
+  const [modalData, setModalData] = useState({});
+  const [filterManager, setFilterManager] = useState('All');
+  const [filterStatus, setFilterStatus] = useState('All');
+  const [selectedWeek, setSelectedWeek] = useState(null);
+  const [showEditWeekModal, setShowEditWeekModal] = useState(false);
+  const [editWeekData, setEditWeekData] = useState({ accountId: null, week: null, status: 'healthy', people: 0 });
+
+  const weeks = useMemo(() => {
+    if (viewMode === 'quarter') {
+      return dateUtils.generateWeeksForQuarter(selectedQuarter);
+    }
+    return dateUtils.generateWeeksForMonth(currentMonth);
+  }, [currentMonth, selectedQuarter, viewMode]);
+
+  const monthsGrouped = useMemo(() => {
+    if (viewMode === 'quarter') {
+      return dateUtils.generateWeeksForQuarterGrouped(selectedQuarter);
+    }
+    return [];
+  }, [selectedQuarter, viewMode]);
+
+  // Initialize collapsed months for past months
+  useEffect(() => {
+    if (viewMode === 'quarter' && monthsGrouped.length > 0) {
+      const initialCollapsed = {};
+      monthsGrouped.forEach(monthData => {
+        if (dateUtils.isPastMonth(monthData.month)) {
+          initialCollapsed[monthData.month] = true;
+        }
+      });
+      setCollapsedMonths(initialCollapsed);
+    }
+  }, [viewMode, selectedQuarter]);
+
+  const getStatusForWeek = (accountId, week) => {
+    const status = statuses.find(s => s.accountId === accountId && s.week === week);
+    if (status) {
+      return { status: status.status, people: status.people || 0 };
+    }
+
+    // Auto-carry forward people count from previous week
+    const allWeeks = weeks;
+    const weekIndex = allWeeks.indexOf(week);
+    if (weekIndex > 0) {
+      // Look for the most recent previous week with data
+      for (let i = weekIndex - 1; i >= 0; i--) {
+        const prevWeek = allWeeks[i];
+        const prevStatus = statuses.find(s => s.accountId === accountId && s.week === prevWeek);
+        if (prevStatus && prevStatus.people > 0) {
+          return { status: 'healthy', people: prevStatus.people };
+        }
+      }
+    }
+
+    return { status: 'healthy', people: 0 };
+  };
+
+  const enrichedAccounts = useMemo(() => {
+    return accounts.map(account => {
+      const manager = managers.find(m => m.id === account.managerId);
+      const accountActions = actionItems.filter(a => a.accountId === account.id);
+      return {
+        ...account,
+        managerName: manager ? manager.name : 'Unassigned',
+        actionItems: accountActions
+      };
+    });
+  }, [accounts, managers, actionItems]);
+
+  const filteredAccounts = useMemo(() => {
+    return enrichedAccounts.filter(account => {
+      const managerMatch = filterManager === 'All' || account.managerName === filterManager;
+      const currentWeekData = selectedWeek ? getStatusForWeek(account.id, selectedWeek) : null;
+      const statusMatch = filterStatus === 'All' || (selectedWeek && currentWeekData.status === filterStatus);
+      return managerMatch && statusMatch;
+    });
+  }, [enrichedAccounts, filterManager, filterStatus, selectedWeek, statuses]);
+
+  const summaryStats = useMemo(() => {
+    if (!selectedWeek) return { total: 0, healthy: 0, attention: 0, critical: 0, totalPeople: 0, pendingActions: 0 };
+
+    // Determine which weeks to include based on view mode
+    let weeksToAnalyze = [];
+    if (viewMode === 'month') {
+      weeksToAnalyze = dateUtils.generateWeeksForMonth(currentMonth);
+    } else {
+      // For quarterly view, use the month of the selected week
+      const selectedMonth = dateUtils.getMonthFromWeek(selectedWeek);
+      weeksToAnalyze = dateUtils.generateWeeksForMonth(selectedMonth);
+    }
+
+    // Calculate stats across all weeks in the period
+    const allStatusData = [];
+    enrichedAccounts.forEach(account => {
+      weeksToAnalyze.forEach(week => {
+        const weekData = getStatusForWeek(account.id, week);
+        allStatusData.push({ ...weekData, accountId: account.id, week });
+      });
+    });
+
+    // Get most recent status per account
+    const latestStatusPerAccount = {};
+    enrichedAccounts.forEach(account => {
+      const accountStatuses = allStatusData.filter(s => s.accountId === account.id);
+      if (accountStatuses.length > 0) {
+        latestStatusPerAccount[account.id] = accountStatuses[accountStatuses.length - 1];
+      }
+    });
+
+    const latestStatuses = Object.values(latestStatusPerAccount);
+
+    // Filter action items by the selected period
+    const periodActionItems = actionItems.filter(item => {
+      if (item.completed) return false;
+      const itemWeek = dateUtils.getMonthFromWeek(item.dueDate);
+      const targetMonth = viewMode === 'month' ? currentMonth : dateUtils.getMonthFromWeek(selectedWeek);
+      return itemWeek === targetMonth;
+    });
+
+    return {
+      total: enrichedAccounts.length,
+      healthy: latestStatuses.filter(s => s.status === 'healthy').length,
+      attention: latestStatuses.filter(s => s.status === 'attention').length,
+      critical: latestStatuses.filter(s => s.status === 'critical').length,
+      totalPeople: latestStatuses.reduce((sum, s) => sum + s.people, 0),
+      pendingActions: periodActionItems.length
+    };
+  }, [enrichedAccounts, selectedWeek, currentMonth, viewMode, actionItems, statuses]);
+
+  const handleSaveAccount = async () => {
+    if (showModal === 'addAccount') {
+      await supabaseService.addAccount({
+        name: modalData.name,
+        managerId: modalData.managerId,
+        people: parseInt(modalData.people),
+        satisfactionScore: { Q1: null, Q2: null, Q3: null, Q4: null },
+        quarterlyComments: { Q1: '', Q2: '', Q3: '', Q4: '' }
+      });
+    } else if (showModal === 'editAccount') {
+      await supabaseService.updateAccount(modalData.id, modalData);
+    }
+    await refreshData();
+    setShowModal(null);
+  };
+
+  const handleSaveActionItem = async () => {
+    await supabaseService.addActionItem({
+      accountId: modalData.accountId,
+      managerId: modalData.managerId,
+      description: modalData.description,
+      dueDate: modalData.dueDate,
+      priority: modalData.priority,
+      completed: false,
+      createdDate: new Date().toISOString().split('T')[0]
+    });
+    await refreshData();
+    setShowModal(null);
+  };
+
+  const handleToggleActionItem = async (itemId) => {
+    const item = actionItems.find(i => i.id === itemId);
+    if (item) {
+      await supabaseService.updateActionItem(itemId, { completed: !item.completed });
+      await refreshData();
+    }
+  };
+
+  const handleUpdateWeekStatus = async (accountId, week, status, people) => {
+    await supabaseService.updateWeeklyStatus(accountId, week, status, people);
+    await refreshData();
+  };
+
+  const handleSaveWeekEdit = async () => {
+    await handleUpdateWeekStatus(editWeekData.accountId, editWeekData.week, editWeekData.status, editWeekData.people);
+    setShowEditWeekModal(false);
+  };
+
+  const openEditWeekModal = (accountId, week) => {
+    const weekData = getStatusForWeek(accountId, week);
+    setEditWeekData({ accountId, week, status: weekData.status, people: weekData.people });
+    setShowEditWeekModal(true);
+  };
+
+  const exportData = () => {
+    const data = JSON.stringify({ managers, accounts, statuses, actionItems }, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `delivery-data-${currentMonth}.json`;
+    a.click();
+  };
+
+  // Check authentication on mount
+  useEffect(() => {
+    const user = authService.getCurrentUser();
+    setCurrentUser(user);
+    setIsAuthChecking(false);
+  }, []);
+
+  // Auto-select current week on mount
+  useEffect(() => {
+    if (weeks.length > 0 && !selectedWeek) {
+      const currentMonday = dateUtils.getCurrentMonday();
+      // Try to find current week in the list
+      const currentWeekInList = weeks.find(w => w === currentMonday);
+      if (currentWeekInList) {
+        setSelectedWeek(currentWeekInList);
+      } else {
+        // If current week not in list, select the closest one (last week in list)
+        setSelectedWeek(weeks[weeks.length - 1]);
+      }
+    }
+  }, [weeks]);
+
+  // Handle login
+  const handleLogin = async (username, password) => {
+    const user = await authService.login(username, password);
+    setCurrentUser(user);
+  };
+
+  // Handle logout
+  const handleLogout = () => {
+    authService.logout();
+    setCurrentUser(null);
+  };
+
+  // Get notifications for action items
+  const getActionNotifications = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const weekStart = selectedWeek;
+    const weekEnd = new Date(selectedWeek);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    const weekEndStr = weekEnd.toISOString().split('T')[0];
+
+    return actionItems.filter(item => {
+      if (item.completed) return false;
+      const dueDate = item.dueDate;
+      // Due today or within the selected week
+      return dueDate === today || (dueDate >= weekStart && dueDate <= weekEndStr);
+    });
+  };
+
+  const notifications = useMemo(() => getActionNotifications(), [actionItems, selectedWeek]);
+
+  // Check if account has notifications
+  const hasNotifications = (accountId) => {
+    return notifications.some(n => n.accountId === accountId);
+  };
+
+  // Show login page if not authenticated
+  if (isAuthChecking) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-xl font-semibold text-gray-700">Loading...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-xl font-semibold text-gray-700">Loading...</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header with User Info and Notifications */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Delivery Management Dashboard</h1>
+              <p className="text-gray-600">Track account health and team performance</p>
+            </div>
+            <div className="flex items-center gap-4">
+              {/* User Info */}
+              <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-lg shadow">
+                <div className="text-right">
+                  <div className="text-sm font-medium text-gray-900">{currentUser.fullName || currentUser.username}</div>
+                  <div className="text-xs text-gray-500">{currentUser.email}</div>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition"
+                  title="Logout"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Notifications Banner */}
+          {notifications.length > 0 && (
+            <div className="bg-orange-50 border-l-4 border-orange-500 p-4 mb-4 rounded-r-lg">
+              <div className="flex items-start gap-3">
+                <Bell className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5 animate-pulse" />
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-orange-900 mb-1">
+                    Action Items Due ({notifications.length})
+                  </h3>
+                  <div className="space-y-1">
+                    {notifications.slice(0, 3).map(notification => {
+                      const account = accounts.find(a => a.id === notification.accountId);
+                      const isToday = notification.dueDate === new Date().toISOString().split('T')[0];
+                      return (
+                        <div key={notification.id} className="text-sm text-orange-800">
+                          <span className="font-medium">{account?.name}</span> - {notification.description}
+                          <span className={`ml-2 text-xs px-2 py-0.5 rounded ${isToday ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>
+                            {isToday ? 'Due Today!' : `Due ${notification.dueDate}`}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    {notifications.length > 3 && (
+                      <div className="text-xs text-orange-700 mt-1">
+                        +{notifications.length - 3} more action items due
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <button onClick={() => { setModalData({ name: '', managerId: managers[0]?.id || '', people: 1 }); setShowModal('addAccount'); }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              <Plus className="w-4 h-4" />Add Account
+            </button>
+            <button onClick={() => { setModalData({ accountId: enrichedAccounts[0]?.id || '', managerId: managers[0]?.id || '', description: '', dueDate: '', priority: 'medium' }); setShowModal('addActionItem'); }} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+              <Plus className="w-4 h-4" />Add Action
+            </button>
+            <button onClick={exportData} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700">
+              <Download className="w-4 h-4" />Export
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
+          <div className="bg-white rounded-lg shadow p-4">
+            <div className="text-sm text-gray-600 mb-1">Total Accounts</div>
+            <div className="text-2xl font-bold text-gray-900">{summaryStats.total}</div>
+          </div>
+          <div className="bg-green-50 rounded-lg shadow p-4">
+            <div className="text-sm text-green-700 mb-1">Healthy</div>
+            <div className="text-2xl font-bold text-green-700">{summaryStats.healthy}</div>
+          </div>
+          <div className="bg-yellow-50 rounded-lg shadow p-4">
+            <div className="text-sm text-yellow-700 mb-1">Attention</div>
+            <div className="text-2xl font-bold text-yellow-700">{summaryStats.attention}</div>
+          </div>
+          <div className="bg-red-50 rounded-lg shadow p-4">
+            <div className="text-sm text-red-700 mb-1">Critical</div>
+            <div className="text-2xl font-bold text-red-700">{summaryStats.critical}</div>
+          </div>
+          <div className="bg-blue-50 rounded-lg shadow p-4">
+            <div className="text-sm text-blue-700 mb-1">Total People</div>
+            <div className="text-2xl font-bold text-blue-700">{summaryStats.totalPeople}</div>
+          </div>
+          <div className="bg-purple-50 rounded-lg shadow p-4">
+            <div className="text-sm text-purple-700 mb-1">Pending Actions</div>
+            <div className="text-2xl font-bold text-purple-700">{summaryStats.pendingActions}</div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-4 mb-6">
+          <div className="flex flex-wrap gap-4">
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-sm font-medium text-gray-700 mb-2">View Mode</label>
+              <select value={viewMode} onChange={(e) => setViewMode(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md">
+                <option value="month">Monthly View</option>
+                <option value="quarter">Quarterly View</option>
+              </select>
+            </div>
+            {viewMode === 'month' ? (
+              <div className="flex-1 min-w-[200px]">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Month</label>
+                <input type="month" value={currentMonth} onChange={(e) => setCurrentMonth(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+              </div>
+            ) : (
+              <div className="flex-1 min-w-[200px]">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Quarter</label>
+                <select value={selectedQuarter} onChange={(e) => setSelectedQuarter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md">
+                  <option value="Q1-2025">Q1 2025</option>
+                  <option value="Q2-2025">Q2 2025</option>
+                  <option value="Q3-2025">Q3 2025</option>
+                  <option value="Q4-2025">Q4 2025</option>
+                  <option value="Q1-2026">Q1 2026</option>
+                </select>
+              </div>
+            )}
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Week</label>
+              <select value={selectedWeek || ''} onChange={(e) => setSelectedWeek(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md">
+                {weeks.map(week => <option key={week} value={week}>{dateUtils.formatWeekDisplay(week)}</option>)}
+              </select>
+            </div>
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Manager</label>
+              <select value={filterManager} onChange={(e) => setFilterManager(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md">
+                <option value="All">All Managers</option>
+                {managers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+              </select>
+            </div>
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md">
+                <option value="All">All Status</option>
+                <option value="healthy">Healthy</option>
+                <option value="attention">Attention</option>
+                <option value="critical">Critical</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow overflow-hidden mb-6">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-800 text-white sticky top-0 z-10">
+                <tr>
+                  <th className="px-4 py-3 text-left text-sm font-semibold sticky left-0 bg-gray-800 z-20">Manager</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold sticky left-[120px] bg-gray-800 z-20">Account</th>
+                  <th className="px-4 py-3 text-center text-sm font-semibold sticky left-[280px] bg-gray-800 z-20">People</th>
+                  {viewMode === 'quarter' ? (
+                    // Quarterly view with month headers
+                    monthsGrouped.map(monthData => (
+                      <React.Fragment key={monthData.month}>
+                        <th
+                          colSpan={collapsedMonths[monthData.month] ? 1 : monthData.weeks.length}
+                          className="px-4 py-3 text-center text-sm font-semibold border-l-2 border-gray-600 cursor-pointer hover:bg-gray-700"
+                          onClick={() => setCollapsedMonths(prev => ({ ...prev, [monthData.month]: !prev[monthData.month] }))}
+                        >
+                          <div className="flex items-center justify-center gap-2">
+                            {collapsedMonths[monthData.month] ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                            {monthData.monthName}
+                          </div>
+                        </th>
+                      </React.Fragment>
+                    ))
+                  ) : (
+                    // Monthly view with week headers
+                    weeks.map(week => (
+                      <th key={week} className="px-4 py-3 text-center text-sm font-semibold min-w-[100px]">
+                        {dateUtils.formatWeekDisplay(week)}
+                      </th>
+                    ))
+                  )}
+                  <th className="px-4 py-3 text-center text-sm font-semibold">Actions</th>
+                </tr>
+                {viewMode === 'quarter' && (
+                  // Week headers for uncollapsed months in quarterly view
+                  <tr>
+                    <th className="sticky left-0 bg-gray-800 z-20"></th>
+                    <th className="sticky left-[120px] bg-gray-800 z-20"></th>
+                    <th className="sticky left-[280px] bg-gray-800 z-20"></th>
+                    {monthsGrouped.map(monthData => (
+                      <React.Fragment key={`weeks-${monthData.month}`}>
+                        {!collapsedMonths[monthData.month] ? (
+                          monthData.weeks.map(week => (
+                            <th key={week} className="px-2 py-2 text-center text-xs font-normal min-w-[80px]">
+                              {dateUtils.formatWeekDisplay(week)}
+                            </th>
+                          ))
+                        ) : (
+                          <th className="px-2 py-2 text-center text-xs font-normal">...</th>
+                        )}
+                      </React.Fragment>
+                    ))}
+                    <th></th>
+                  </tr>
+                )}
+              </thead>
+              <tbody>
+                {filteredAccounts.map((account, idx) => (
+                  <React.Fragment key={account.id}>
+                    <tr className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} border-b hover:bg-gray-100 ${hasNotifications(account.id) ? 'border-l-4 border-l-orange-500' : ''}`}>
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900 sticky left-0 bg-inherit z-10">{account.managerName}</td>
+                      <td className="px-4 py-3 sticky left-[120px] bg-inherit z-10">
+                        <div className="flex items-center gap-2">
+                          {hasNotifications(account.id) && (
+                            <Bell className="w-4 h-4 text-orange-600 animate-pulse" title="Has action items due" />
+                          )}
+                          <button onClick={() => setExpandedAccounts(prev => ({ ...prev, [account.id]: !prev[account.id] }))} className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-800">
+                            {expandedAccounts[account.id] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                            {account.name}
+                          </button>
+                          <button onClick={() => { setModalData({ ...account }); setShowModal('editAccount'); }} className="text-gray-400 hover:text-gray-600">
+                            <Edit2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-center sticky left-[280px] bg-inherit z-10">
+                        <span className="inline-flex items-center gap-1 text-sm text-gray-700"><Users className="w-4 h-4" />{account.people}</span>
+                      </td>
+                      {viewMode === 'quarter' ? (
+                        // Quarterly view with collapsible months
+                        monthsGrouped.map(monthData => (
+                          <React.Fragment key={`${account.id}-${monthData.month}`}>
+                            {!collapsedMonths[monthData.month] ? (
+                              monthData.weeks.map(week => {
+                                const weekData = getStatusForWeek(account.id, week);
+                                return (
+                                  <td key={week} className={'px-2 py-3 cursor-pointer ' + statusUtils.getStatusColor(weekData.status)} onClick={() => openEditWeekModal(account.id, week)}>
+                                    <div className="flex flex-col items-center justify-center">
+                                      {statusUtils.getStatusIcon(weekData.status)}
+                                      <span className="text-xs font-semibold mt-1 text-gray-800">{weekData.people}</span>
+                                    </div>
+                                  </td>
+                                );
+                              })
+                            ) : (
+                              <td className="px-2 py-3 text-center text-xs text-gray-500 bg-gray-100">
+                                Collapsed
+                              </td>
+                            )}
+                          </React.Fragment>
+                        ))
+                      ) : (
+                        // Monthly view
+                        weeks.map(week => {
+                          const weekData = getStatusForWeek(account.id, week);
+                          return (
+                            <td key={week} className={'px-4 py-3 cursor-pointer ' + statusUtils.getStatusColor(weekData.status)} onClick={() => openEditWeekModal(account.id, week)}>
+                              <div className="flex flex-col items-center justify-center">
+                                {statusUtils.getStatusIcon(weekData.status)}
+                                <span className="text-xs font-semibold mt-1 text-gray-800">{weekData.people}</span>
+                              </div>
+                            </td>
+                          );
+                        })
+                      )}
+                      <td className="px-4 py-3">
+                        <button onClick={() => { setModalData({ accountId: account.id, managerId: account.managerId, description: '', dueDate: '', priority: 'medium' }); setShowModal('addActionItem'); }} className="flex items-center gap-1 mx-auto px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded">
+                          <MessageSquare className="w-4 h-4" />{account.actionItems.filter(i => !i.completed).length}
+                        </button>
+                      </td>
+                    </tr>
+                    {expandedAccounts[account.id] && (
+                      <tr className="bg-blue-50">
+                        <td colSpan={weeks.length + 4} className="px-4 py-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <h4 className="text-sm font-semibold text-gray-900 mb-2">Action Items</h4>
+                              {account.actionItems.length > 0 ? (
+                                <div className="space-y-2">
+                                  {account.actionItems.map(item => {
+                                    const today = new Date().toISOString().split('T')[0];
+                                    const isDueToday = item.dueDate === today && !item.completed;
+                                    const isDueSoon = notifications.some(n => n.id === item.id);
+                                    return (
+                                      <div key={item.id} className={`flex items-start gap-3 p-3 rounded ${isDueToday ? 'bg-red-50 border-2 border-red-300' : isDueSoon ? 'bg-orange-50 border-2 border-orange-300' : 'bg-white'}`}>
+                                        <input type="checkbox" checked={item.completed} onChange={() => handleToggleActionItem(item.id)} className="mt-1 w-4 h-4 text-blue-600 rounded" />
+                                        <div className="flex-1">
+                                          <div className="flex items-start gap-2">
+                                            {isDueToday && <Bell className="w-4 h-4 text-red-600 animate-pulse flex-shrink-0" />}
+                                            <p className={item.completed ? 'text-sm line-through text-gray-500' : 'text-sm text-gray-900'}>{item.description}</p>
+                                          </div>
+                                          <div className="flex items-center gap-3 mt-1">
+                                            <span className={`text-xs ${isDueToday ? 'text-red-700 font-semibold' : 'text-gray-500'}`}>
+                                              {isDueToday ? '⚠️ Due Today!' : item.dueDate}
+                                            </span>
+                                            <span className={'text-xs px-2 py-0.5 rounded ' + (item.priority === 'high' ? 'bg-red-100 text-red-700' : item.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-700')}>{item.priority}</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : <p className="text-sm text-gray-500">No action items</p>}
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-semibold text-gray-900 mb-2">Quarterly Data</h4>
+                              <div className="bg-white p-3 rounded space-y-2">
+                                {CONSTANTS.QUARTERS.map(quarter => (
+                                  <div key={quarter} className="text-sm">
+                                    <span className="font-medium text-gray-700">{quarter}:</span>
+                                    <span className="ml-2 text-gray-900">Score: {account.satisfactionScore[quarter] || 'N/A'}</span>
+                                    {account.quarterlyComments[quarter] && <p className="text-xs text-gray-600 mt-1">{account.quarterlyComments[quarter]}</p>}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+                <tr className="bg-blue-100 border-t-2 border-blue-300 font-bold">
+                  <td colSpan={3} className="px-4 py-3 text-sm text-center text-gray-900">TOTAL PEOPLE PER WEEK</td>
+                  {weeks.map(week => {
+                    const totalPeople = enrichedAccounts.reduce((sum, account) => {
+                      const weekData = getStatusForWeek(account.id, week);
+                      return sum + weekData.people;
+                    }, 0);
+                    return (
+                      <td key={week} className="px-4 py-3 text-center bg-blue-200">
+                        <span className="text-lg font-bold text-blue-900">{totalPeople}</span>
+                      </td>
+                    );
+                  })}
+                  <td className="px-4 py-3"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {showModal === 'addAccount' && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+              <h2 className="text-xl font-bold mb-4">Add New Account</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Account Name</label>
+                  <input type="text" value={modalData.name} onChange={(e) => setModalData({...modalData, name: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Manager</label>
+                  <select value={modalData.managerId} onChange={(e) => setModalData({...modalData, managerId: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-md">
+                    {managers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Number of People</label>
+                  <input type="number" value={modalData.people} onChange={(e) => setModalData({...modalData, people: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                </div>
+              </div>
+              <div className="flex gap-2 mt-6">
+                <button onClick={handleSaveAccount} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"><Save className="w-4 h-4 inline mr-2" />Save</button>
+                <button onClick={() => setShowModal(null)} className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showModal === 'editAccount' && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+              <h2 className="text-xl font-bold mb-4">Edit Account: {modalData.name}</h2>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Account Name</label>
+                    <input type="text" value={modalData.name} onChange={(e) => setModalData({...modalData, name: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Manager</label>
+                    <select value={modalData.managerId} onChange={(e) => setModalData({...modalData, managerId: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-md">
+                      {managers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Number of People</label>
+                    <input type="number" value={modalData.people} onChange={(e) => setModalData({...modalData, people: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold mb-3">Quarterly Satisfaction Scores</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    {CONSTANTS.QUARTERS.map(q => (
+                      <div key={q}>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{q} Score (1-10)</label>
+                        <input type="number" min="1" max="10" value={modalData.satisfactionScore?.[q] || ''} onChange={(e) => setModalData({ ...modalData, satisfactionScore: { ...modalData.satisfactionScore, [q]: e.target.value ? parseInt(e.target.value) : null }})} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold mb-3">Quarterly Comments</h3>
+                  <div className="space-y-3">
+                    {CONSTANTS.QUARTERS.map(q => (
+                      <div key={q}>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{q} Comments</label>
+                        <textarea value={modalData.quarterlyComments?.[q] || ''} onChange={(e) => setModalData({ ...modalData, quarterlyComments: { ...modalData.quarterlyComments, [q]: e.target.value }})} className="w-full px-3 py-2 border border-gray-300 rounded-md" rows="2" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-6">
+                <button onClick={handleSaveAccount} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"><Save className="w-4 h-4 inline mr-2" />Save Changes</button>
+                <button onClick={() => setShowModal(null)} className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+
+
+
+
+        {showModal === 'addActionItem' && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+              <h2 className="text-xl font-bold mb-4">Add Action Item</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Account</label>
+                  <select value={modalData.accountId} onChange={(e) => setModalData({...modalData, accountId: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-md">
+                    {enrichedAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Manager</label>
+                  <select value={modalData.managerId} onChange={(e) => setModalData({...modalData, managerId: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-md">
+                    {managers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                  <textarea value={modalData.description} onChange={(e) => setModalData({...modalData, description: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-md" rows="3" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                  <input type="date" value={modalData.dueDate} onChange={(e) => setModalData({...modalData, dueDate: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                  <select value={modalData.priority} onChange={(e) => setModalData({...modalData, priority: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-md">
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-6">
+                <button onClick={handleSaveActionItem} className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"><Save className="w-4 h-4 inline mr-2" />Save</button>
+                <button onClick={() => setShowModal(null)} className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showEditWeekModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+              <h2 className="text-xl font-bold mb-4">Edit Week Status</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Week</label>
+                  <input type="text" value={editWeekData.week} disabled className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                  <select value={editWeekData.status} onChange={(e) => setEditWeekData({...editWeekData, status: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-md">
+                    <option value="healthy">Healthy</option>
+                    <option value="attention">Attention</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Number of People</label>
+                  <input type="number" min="0" value={editWeekData.people} onChange={(e) => setEditWeekData({...editWeekData, people: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                </div>
+              </div>
+              <div className="flex gap-2 mt-6">
+                <button onClick={handleSaveWeekEdit} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"><Save className="w-4 h-4 inline mr-2" />Save</button>
+                <button onClick={() => setShowEditWeekModal(false)} className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default DeliveryManagerDashboard;
