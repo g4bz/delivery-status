@@ -612,18 +612,7 @@ const DeliveryManagerDashboard = () => {
               <LayoutDashboard className="w-4 h-4" />
               Dashboard
             </button>
-            <button
-              onClick={() => setActiveTab('accounts')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
-                activeTab === 'accounts'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              <TrendingUp className="w-4 h-4" />
-              Accounts Analytics
-            </button>
-            <button
+             <button
               onClick={() => setActiveTab('managers')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
                 activeTab === 'managers'
@@ -634,8 +623,18 @@ const DeliveryManagerDashboard = () => {
               <Users className="w-4 h-4" />
               Manager Summary
             </button>
+            <button
+              onClick={() => setActiveTab('accounts')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+                activeTab === 'accounts'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <TrendingUp className="w-4 h-4" />
+              Accounts Analytics
+            </button>           
           </div>
-
           {activeTab === 'dashboard' && (
             <div className="flex gap-2">
               <button onClick={() => { setModalData({ name: '', managerId: managers[0]?.id || '', people: 1 }); setShowModal('addAccount'); }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
