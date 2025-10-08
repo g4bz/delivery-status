@@ -921,7 +921,7 @@ const DeliveryManagerDashboard = () => {
                   </React.Fragment>
                 ))}
                 <tr className="bg-blue-100 border-t-2 border-blue-300 font-bold">
-                  <td colSpan={3} className="px-4 py-3 text-sm text-center text-gray-900">TOTAL PEOPLE PER WEEK</td>
+                  <td colSpan={2} className="px-4 py-3 text-sm text-center text-gray-900">TOTAL PEOPLE PER WEEK</td>
                   {weeks.map(week => {
                     const totalPeople = enrichedAccounts.reduce((sum, account) => {
                       const weekData = getStatusForWeek(account.id, week);
