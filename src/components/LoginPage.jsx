@@ -96,17 +96,6 @@ const LoginPage = ({ onLogin }) => {
             )}
           </button>
         </form>
-
-        {/* Test Credentials Info */}
-        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-sm text-blue-800 font-medium mb-1">Test Credentials:</p>
-          <p className="text-xs text-blue-700">
-            Username: <span className="font-mono font-semibold">admin</span>
-          </p>
-          <p className="text-xs text-blue-700">
-            Password: <span className="font-mono font-semibold">admin$</span>
-          </p>
-        </div>
       </div>
     </div>
   );
