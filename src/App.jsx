@@ -1,8 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, Edit2, CheckCircle, AlertCircle, XCircle, MessageSquare, ChevronDown, ChevronRight, Download, Save, LogOut, Bell } from 'lucide-react';
+import { Plus, Edit2, CheckCircle, AlertCircle, XCircle, MessageSquare, ChevronDown, ChevronRight, Download, Save, LogOut, Bell, LayoutDashboard, TrendingUp, Users } from 'lucide-react';
 import * as supabaseService from './supabase/supabaseService';
 import * as authService from './supabase/authService';
 import LoginPage from './components/LoginPage';
+import AccountsView from './components/AccountsView';
+import ManagerSummary from './components/ManagerSummary';
 
 // ============================================================================
 // CONSTANTS
@@ -206,6 +208,7 @@ const DeliveryManagerDashboard = () => {
   const { managers, accounts, statuses, actionItems, loading, refreshData } = useData();
   const [currentUser, setCurrentUser] = useState(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const [activeTab, setActiveTab] = useState('dashboard');
 
   const [currentMonth, setCurrentMonth] = useState(dateUtils.getCurrentMonth());
   const [viewMode, setViewMode] = useState('month');
@@ -220,6 +223,7 @@ const DeliveryManagerDashboard = () => {
   const [showEditWeekModal, setShowEditWeekModal] = useState(false);
   const [editWeekData, setEditWeekData] = useState({ accountId: null, week: null, status: 'healthy', people: 0, notes: '' });
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  const [satisfactionScores, setSatisfactionScores] = useState([]);
 
   const weeks = useMemo(() => {
     if (viewMode === 'quarter') {
@@ -376,10 +380,16 @@ const DeliveryManagerDashboard = () => {
         managerId: modalData.managerId,
         people: parseInt(modalData.people),
         satisfactionScore: { Q1: null, Q2: null, Q3: null, Q4: null },
-        quarterlyComments: { Q1: '', Q2: '', Q3: '', Q4: '' }
+        quarterlyComments: { Q1: '', Q2: '', Q3: '', Q4: '' },
+        primaryLanguage: modalData.primaryLanguage || null,
+        languageStack: modalData.languageStack || []
       });
     } else if (showModal === 'editAccount') {
-      await supabaseService.updateAccount(modalData.id, modalData);
+      await supabaseService.updateAccount(modalData.id, {
+        ...modalData,
+        primaryLanguage: modalData.primaryLanguage || null,
+        languageStack: modalData.languageStack || []
+      });
     }
     await refreshData();
     setShowModal(null);
@@ -438,6 +448,19 @@ const DeliveryManagerDashboard = () => {
     const user = authService.getCurrentUser();
     setCurrentUser(user);
     setIsAuthChecking(false);
+  }, []);
+
+  // Load satisfaction scores on mount
+  useEffect(() => {
+    const loadSatisfactionScores = async () => {
+      try {
+        const scores = await supabaseService.getSatisfactionScores();
+        setSatisfactionScores(scores);
+      } catch (error) {
+        console.error('Error loading satisfaction scores:', error);
+      }
+    };
+    loadSatisfactionScores();
   }, []);
 
   // Auto-select current week on mount
@@ -576,18 +599,61 @@ const DeliveryManagerDashboard = () => {
             </div>
           )}
 
-          <div className="flex gap-2">
-            <button onClick={() => { setModalData({ name: '', managerId: managers[0]?.id || '', people: 1 }); setShowModal('addAccount'); }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-              <Plus className="w-4 h-4" />Add Account
+          {/* Tab Navigation */}
+          <div className="flex gap-2 mb-4 bg-white rounded-lg shadow p-2">
+            <button
+              onClick={() => setActiveTab('dashboard')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+                activeTab === 'dashboard'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              Dashboard
             </button>
-            <button onClick={() => { setModalData({ accountId: enrichedAccounts[0]?.id || '', managerId: managers[0]?.id || '', description: '', dueDate: '', priority: 'medium' }); setShowModal('addActionItem'); }} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
-              <Plus className="w-4 h-4" />Add Action
+            <button
+              onClick={() => setActiveTab('accounts')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+                activeTab === 'accounts'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <TrendingUp className="w-4 h-4" />
+              Accounts Analytics
             </button>
-            <button onClick={exportData} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700">
-              <Download className="w-4 h-4" />Export
+            <button
+              onClick={() => setActiveTab('managers')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+                activeTab === 'managers'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              Manager Summary
             </button>
           </div>
+
+          {activeTab === 'dashboard' && (
+            <div className="flex gap-2">
+              <button onClick={() => { setModalData({ name: '', managerId: managers[0]?.id || '', people: 1 }); setShowModal('addAccount'); }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                <Plus className="w-4 h-4" />Add Account
+              </button>
+              <button onClick={() => { setModalData({ accountId: enrichedAccounts[0]?.id || '', managerId: managers[0]?.id || '', description: '', dueDate: '', priority: 'medium' }); setShowModal('addActionItem'); }} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                <Plus className="w-4 h-4" />Add Action
+              </button>
+              <button onClick={exportData} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700">
+                <Download className="w-4 h-4" />Export
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Dashboard View */}
+        {activeTab === 'dashboard' && (
+          <>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
           <div className="bg-white rounded-lg shadow p-4">
             <div className="text-sm text-gray-600 mb-1">Total Accounts</div>
@@ -873,6 +939,23 @@ const DeliveryManagerDashboard = () => {
             </table>
           </div>
         </div>
+          </>
+        )}
+
+        {/* Accounts Analytics View */}
+        {activeTab === 'accounts' && (
+          <AccountsView accounts={accounts} managers={managers} />
+        )}
+
+        {/* Manager Summary View */}
+        {activeTab === 'managers' && (
+          <ManagerSummary
+            accounts={accounts}
+            managers={managers}
+            statuses={statuses}
+            satisfactionScores={satisfactionScores}
+          />
+        )}
 
         {showModal === 'addAccount' && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -892,6 +975,30 @@ const DeliveryManagerDashboard = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Number of People</label>
                   <input type="number" value={modalData.people} onChange={(e) => setModalData({...modalData, people: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Primary Language</label>
+                  <input
+                    type="text"
+                    value={modalData.primaryLanguage || ''}
+                    onChange={(e) => setModalData({...modalData, primaryLanguage: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    placeholder="e.g., JavaScript"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Language Stack (comma-separated)</label>
+                  <input
+                    type="text"
+                    value={modalData.languageStack?.join(', ') || ''}
+                    onChange={(e) => setModalData({
+                      ...modalData,
+                      languageStack: e.target.value.split(',').map(s => s.trim()).filter(s => s)
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    placeholder="e.g., JavaScript, React, Node.js, Python"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Separate technologies with commas</p>
                 </div>
               </div>
               <div className="flex gap-2 mt-6">
@@ -922,6 +1029,42 @@ const DeliveryManagerDashboard = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Number of People</label>
                     <input type="number" value={modalData.people} onChange={(e) => setModalData({...modalData, people: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Primary Language</label>
+                    <input
+                      type="text"
+                      value={modalData.primaryLanguage || ''}
+                      onChange={(e) => setModalData({...modalData, primaryLanguage: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      placeholder="e.g., JavaScript"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Language Stack (comma-separated)</label>
+                    <input
+                      type="text"
+                      value={modalData.languageStack?.join(', ') || ''}
+                      onChange={(e) => setModalData({
+                        ...modalData,
+                        languageStack: e.target.value.split(',').map(s => s.trim()).filter(s => s)
+                      })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      placeholder="e.g., JavaScript, React, Node.js, Python"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Separate technologies with commas</p>
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold mb-3">Technology Stack</h3>
+                  {modalData.languageStack && modalData.languageStack.length > 0 && (
+                    <div className="flex gap-2 flex-wrap mb-3">
+                      {modalData.languageStack.map((lang, idx) => (
+                        <span key={idx} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+                          {lang}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold mb-3">Quarterly Satisfaction Scores</h3>

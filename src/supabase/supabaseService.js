@@ -86,7 +86,9 @@ export const addAccount = async (account) => {
       quarterly_comment_q1: account.quarterlyComments?.Q1 || '',
       quarterly_comment_q2: account.quarterlyComments?.Q2 || '',
       quarterly_comment_q3: account.quarterlyComments?.Q3 || '',
-      quarterly_comment_q4: account.quarterlyComments?.Q4 || ''
+      quarterly_comment_q4: account.quarterlyComments?.Q4 || '',
+      primary_language: account.primaryLanguage || null,
+      language_stack: account.languageStack || []
     };
 
     const { data, error } = await supabase
@@ -144,6 +146,14 @@ export const updateAccount = async (id, updates) => {
       dbUpdates.quarterly_comment_q2 = updates.quarterlyComments.Q2;
       dbUpdates.quarterly_comment_q3 = updates.quarterlyComments.Q3;
       dbUpdates.quarterly_comment_q4 = updates.quarterlyComments.Q4;
+    }
+
+    // Handle language stack if present
+    if (updates.primaryLanguage !== undefined) {
+      dbUpdates.primary_language = updates.primaryLanguage;
+    }
+    if (updates.languageStack !== undefined) {
+      dbUpdates.language_stack = updates.languageStack;
     }
 
     const { data, error } = await supabase
