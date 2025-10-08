@@ -812,7 +812,7 @@ const DeliveryManagerDashboard = () => {
                   <React.Fragment key={account.id}>
                     <tr className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} border-b hover:bg-gray-100 ${hasNotifications(account.id) ? 'border-l-4 border-l-orange-500' : ''}`}>
                       <td className="px-4 py-3 text-sm font-medium text-gray-900 sticky left-0 bg-inherit z-10">{account.managerName}</td>
-                      <td className="px-4 py-3 sticky left-[120px] bg-inherit z-10">
+                      <td className="px-4 py-3 bg-inherit z-10">
                         <div className="flex items-center gap-2">
                           {hasNotifications(account.id) && (
                             <Bell className="w-4 h-4 text-orange-600 animate-pulse" title="Has action items due" />
