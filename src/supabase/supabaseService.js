@@ -220,7 +220,7 @@ export const getWeeklyStatuses = async () => {
   }
 };
 
-export const updateWeeklyStatus = async (accountId, week, status, people, notes = '', createdByUserId = null, createdByUserName = null, billedAmount = null) => {
+export const updateWeeklyStatus = async (accountId, week, status, people, notes = '', createdByUserId = null, createdByUserName = null) => {
   try {
     // Check if status exists
     const { data: existing } = await supabase
@@ -232,21 +232,16 @@ export const updateWeeklyStatus = async (accountId, week, status, people, notes 
 
     if (existing) {
       // Update existing status
-      const updateData = { status, people, notes };
-      if (billedAmount !== null) {
-        updateData.billed_amount = billedAmount;
-      }
-
       const { error } = await supabase
         .from('weekly_statuses')
-        .update(updateData)
+        .update({ status, people, notes })
         .eq('account_id', accountId)
         .eq('week', week);
 
       if (error) throw error;
     } else {
       // Insert new status with user tracking
-      const { error } = await supabase
+      const { error} = await supabase
         .from('weekly_statuses')
         .insert([{
           account_id: accountId,
@@ -255,8 +250,7 @@ export const updateWeeklyStatus = async (accountId, week, status, people, notes 
           people,
           notes,
           created_by_user_id: createdByUserId,
-          created_by_user_name: createdByUserName,
-          billed_amount: billedAmount || 0
+          created_by_user_name: createdByUserName
         }]);
 
       if (error) throw error;

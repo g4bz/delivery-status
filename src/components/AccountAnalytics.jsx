@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { TrendingUp, Users, DollarSign, Calendar } from 'lucide-react';
 
-const AccountAnalytics = ({ accounts, statuses }) => {
+const AccountAnalytics = ({ accounts, statuses, billing }) => {
   const [viewPeriod, setViewPeriod] = useState('6months'); // year, quarter, 6months
   const [selectedAccount, setSelectedAccount] = useState('all');
 
@@ -52,6 +52,10 @@ const AccountAnalytics = ({ accounts, statuses }) => {
       let totalPeople = 0;
       let totalBilled = 0;
 
+      // Get month for billing data
+      const weekDate = new Date(week);
+      const monthStr = `${weekDate.getFullYear()}-${String(weekDate.getMonth() + 1).padStart(2, '0')}-01`;
+
       accountsToAnalyze.forEach(account => {
         // Find status for this week or carry forward
         let weekData = statuses.find(s => s.accountId === account.id && s.week === week);
@@ -70,7 +74,21 @@ const AccountAnalytics = ({ accounts, statuses }) => {
 
         if (weekData) {
           totalPeople += weekData.people || 0;
-          totalBilled += weekData.billedAmount || 0;
+        }
+
+        // Get billing for this month
+        const billingRecord = billing.find(b => b.accountId === account.id && b.billingMonth === monthStr);
+        if (billingRecord) {
+          totalBilled += billingRecord.billedAmount || 0;
+        } else {
+          // Carry forward from previous month if not set
+          const prevMonthDate = new Date(weekDate);
+          prevMonthDate.setMonth(prevMonthDate.getMonth() - 1);
+          const prevMonthStr = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}-01`;
+          const prevBilling = billing.find(b => b.accountId === account.id && b.billingMonth === prevMonthStr);
+          if (prevBilling) {
+            totalBilled += prevBilling.billedAmount || 0;
+          }
         }
       });
 
@@ -81,7 +99,7 @@ const AccountAnalytics = ({ accounts, statuses }) => {
         billed: totalBilled
       };
     });
-  }, [weeks, accounts, statuses, selectedAccount]);
+  }, [weeks, accounts, statuses, billing, selectedAccount]);
 
   // Calculate max values for scaling
   const maxPeople = Math.max(...analyticsData.map(d => d.people), 1);
@@ -181,7 +199,7 @@ const AccountAnalytics = ({ accounts, statuses }) => {
             <DollarSign className="w-8 h-8 text-green-600" />
             <div>
               <div className="text-sm text-gray-600">Avg Billed/Week</div>
-              <div className="text-2xl font-bold text-gray-900">${averages.billed}</div>
+              <div className="text-2xl font-bold text-gray-900">${parseFloat(averages.billed).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
             </div>
           </div>
         </div>

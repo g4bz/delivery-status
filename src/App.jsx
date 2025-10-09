@@ -173,6 +173,7 @@ const useData = () => {
   const [accounts, setAccounts] = useState([]);
   const [statuses, setStatuses] = useState([]);
   const [actionItems, setActionItems] = useState([]);
+  const [billing, setBilling] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -181,17 +182,19 @@ const useData = () => {
 
   const loadData = async () => {
     try {
-      const [managersData, accountsData, statusesData, itemsData] = await Promise.all([
+      const [managersData, accountsData, statusesData, itemsData, billingData] = await Promise.all([
         supabaseService.getManagers(),
         supabaseService.getAccounts(),
         supabaseService.getWeeklyStatuses(),
-        supabaseService.getActionItems()
+        supabaseService.getActionItems(),
+        supabaseService.getAccountBilling()
       ]);
 
       setManagers(managersData);
       setAccounts(accountsData);
       setStatuses(statusesData);
       setActionItems(itemsData);
+      setBilling(billingData);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -199,14 +202,14 @@ const useData = () => {
     }
   };
 
-  return { managers, accounts, statuses, actionItems, loading, refreshData: loadData };
+  return { managers, accounts, statuses, actionItems, billing, loading, refreshData: loadData };
 };
 
 // ============================================================================
 // MAIN APPLICATION COMPONENT
 // ============================================================================
 const DeliveryManagerDashboard = () => {
-  const { managers, accounts, statuses, actionItems, loading, refreshData } = useData();
+  const { managers, accounts, statuses, actionItems, billing, loading, refreshData } = useData();
   const [currentUser, setCurrentUser] = useState(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -223,7 +226,9 @@ const DeliveryManagerDashboard = () => {
   const [filterStatus, setFilterStatus] = useState('All');
   const [selectedWeek, setSelectedWeek] = useState(null);
   const [showEditWeekModal, setShowEditWeekModal] = useState(false);
-  const [editWeekData, setEditWeekData] = useState({ accountId: null, week: null, status: 'healthy', people: 0, notes: '', billedAmount: 0 });
+  const [editWeekData, setEditWeekData] = useState({ accountId: null, week: null, status: 'healthy', people: 0, notes: '' });
+  const [showBillingModal, setShowBillingModal] = useState(false);
+  const [billingData, setBillingData] = useState({ accountId: null, month: '', amount: 0 });
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [satisfactionScores, setSatisfactionScores] = useState([]);
 
@@ -498,7 +503,7 @@ const DeliveryManagerDashboard = () => {
     }
   };
 
-  const handleUpdateWeekStatus = async (accountId, week, status, people, notes = '', billedAmount = null) => {
+  const handleUpdateWeekStatus = async (accountId, week, status, people, notes = '') => {
     await supabaseService.updateWeeklyStatus(
       accountId,
       week,
@@ -506,20 +511,19 @@ const DeliveryManagerDashboard = () => {
       people,
       notes,
       currentUser?.id || null,
-      currentUser?.fullName || currentUser?.username || 'Unknown',
-      billedAmount
+      currentUser?.fullName || currentUser?.username || 'Unknown'
     );
     await refreshData();
   };
 
   const handleSaveWeekEdit = async () => {
-    await handleUpdateWeekStatus(editWeekData.accountId, editWeekData.week, editWeekData.status, editWeekData.people, editWeekData.notes, editWeekData.billedAmount);
+    await handleUpdateWeekStatus(editWeekData.accountId, editWeekData.week, editWeekData.status, editWeekData.people, editWeekData.notes);
     setShowEditWeekModal(false);
   };
 
   const openEditWeekModal = (accountId, week) => {
     const weekData = getStatusForWeek(accountId, week);
-    setEditWeekData({ accountId, week, status: weekData.status, people: weekData.people, notes: weekData.notes || '', billedAmount: weekData.billedAmount || 0 });
+    setEditWeekData({ accountId, week, status: weekData.status, people: weekData.people, notes: weekData.notes || '' });
     setShowEditWeekModal(true);
   };
 
@@ -527,7 +531,7 @@ const DeliveryManagerDashboard = () => {
     e.stopPropagation(); // Prevent modal from opening
     const weekData = getStatusForWeek(accountId, week);
     const newStatus = statusUtils.cycleStatus(weekData.status);
-    await handleUpdateWeekStatus(accountId, week, newStatus, weekData.people, weekData.notes, weekData.billedAmount);
+    await handleUpdateWeekStatus(accountId, week, newStatus, weekData.people, weekData.notes);
   };
 
   const handleDeleteWeekNote = async (accountId, week) => {
@@ -535,6 +539,28 @@ const DeliveryManagerDashboard = () => {
       await supabaseService.deleteWeeklyStatus(accountId, week);
       await refreshData();
     }
+  };
+
+  // Get billing amount for a specific month
+  const getBillingForMonth = (accountId, monthStr) => {
+    const billingMonth = `${monthStr}-01`; // Format: YYYY-MM-01
+    const billingRecord = billing.find(b => b.accountId === accountId && b.billingMonth === billingMonth);
+    return billingRecord ? billingRecord.billedAmount : 0;
+  };
+
+  // Open billing modal for a specific month
+  const openBillingModal = (accountId, monthStr) => {
+    const amount = getBillingForMonth(accountId, monthStr);
+    setBillingData({ accountId, month: monthStr, amount });
+    setShowBillingModal(true);
+  };
+
+  // Save billing data
+  const handleSaveBilling = async () => {
+    const billingMonth = `${billingData.month}-01`;
+    await supabaseService.upsertBilling(billingData.accountId, billingMonth, billingData.amount);
+    await refreshData();
+    setShowBillingModal(false);
   };
 
   const exportData = () => {
@@ -999,9 +1025,14 @@ const DeliveryManagerDashboard = () => {
                         })
                       )}
                       <td className="px-4 py-3">
-                        <button onClick={() => { setModalData({ accountId: account.id, managerId: account.managerId, description: '', dueDate: '', priority: 'medium' }); setShowModal('addActionItem'); }} className="flex items-center gap-1 mx-auto px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded">
-                          <MessageSquare className="w-4 h-4" />{account.actionItems.filter(i => !i.completed).length}
-                        </button>
+                        <div className="flex flex-col items-center gap-2">
+                          <button onClick={() => { setModalData({ accountId: account.id, managerId: account.managerId, description: '', dueDate: '', priority: 'medium' }); setShowModal('addActionItem'); }} className="flex items-center gap-1 px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded">
+                            <MessageSquare className="w-4 h-4" />{account.actionItems.filter(i => !i.completed).length}
+                          </button>
+                          <button onClick={() => openBillingModal(account.id, currentMonth)} className="flex items-center gap-1 px-3 py-1 text-sm text-green-600 hover:bg-green-50 rounded" title="Monthly Billing">
+                            ${(getBillingForMonth(account.id, currentMonth) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                     {expandedAccounts[account.id] && (
@@ -1163,6 +1194,7 @@ const DeliveryManagerDashboard = () => {
           <AccountAnalytics
             accounts={accounts}
             statuses={statuses}
+            billing={billing}
           />
         )}
 
@@ -1381,11 +1413,6 @@ const DeliveryManagerDashboard = () => {
                   <input type="number" min="0" value={editWeekData.people} onChange={(e) => setEditWeekData({...editWeekData, people: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Billed Amount ($)</label>
-                  <input type="number" min="0" step="0.01" value={editWeekData.billedAmount} onChange={(e) => setEditWeekData({...editWeekData, billedAmount: parseFloat(e.target.value) || 0})} className="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="0.00" />
-                  <p className="text-xs text-gray-500 mt-1">Auto-carries forward to next weeks unless overridden</p>
-                </div>
-                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
                   <textarea
                     value={editWeekData.notes}
@@ -1399,6 +1426,39 @@ const DeliveryManagerDashboard = () => {
               <div className="flex gap-2 mt-6">
                 <button onClick={handleSaveWeekEdit} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"><Save className="w-4 h-4 inline mr-2" />Save</button>
                 <button onClick={() => setShowEditWeekModal(false)} className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Billing Modal */}
+        {showBillingModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+              <h2 className="text-xl font-bold mb-4">Monthly Billing Amount</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Month</label>
+                  <input type="text" value={new Date(billingData.month + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'long' })} disabled className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Billed Amount ($)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={billingData.amount}
+                    onChange={(e) => setBillingData({...billingData, amount: parseFloat(e.target.value) || 0})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    placeholder="0.00"
+                    autoFocus
+                  />
+                  <p className="text-xs text-gray-500 mt-1">This amount will automatically carry forward to next months unless overridden</p>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-6">
+                <button onClick={handleSaveBilling} className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"><Save className="w-4 h-4 inline mr-2" />Save</button>
+                <button onClick={() => setShowBillingModal(false)} className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">Cancel</button>
               </div>
             </div>
           </div>
