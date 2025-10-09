@@ -211,7 +211,8 @@ export const getWeeklyStatuses = async () => {
       people: status.people,
       notes: status.notes || '',
       createdByUserId: status.created_by_user_id,
-      createdByUserName: status.created_by_user_name
+      createdByUserName: status.created_by_user_name,
+      billedAmount: status.billed_amount || 0
     }));
   } catch (error) {
     console.error('Error fetching weekly statuses:', error);
@@ -219,7 +220,7 @@ export const getWeeklyStatuses = async () => {
   }
 };
 
-export const updateWeeklyStatus = async (accountId, week, status, people, notes = '', createdByUserId = null, createdByUserName = null) => {
+export const updateWeeklyStatus = async (accountId, week, status, people, notes = '', createdByUserId = null, createdByUserName = null, billedAmount = null) => {
   try {
     // Check if status exists
     const { data: existing } = await supabase
@@ -231,9 +232,14 @@ export const updateWeeklyStatus = async (accountId, week, status, people, notes 
 
     if (existing) {
       // Update existing status
+      const updateData = { status, people, notes };
+      if (billedAmount !== null) {
+        updateData.billed_amount = billedAmount;
+      }
+
       const { error } = await supabase
         .from('weekly_statuses')
-        .update({ status, people, notes })
+        .update(updateData)
         .eq('account_id', accountId)
         .eq('week', week);
 
@@ -249,7 +255,8 @@ export const updateWeeklyStatus = async (accountId, week, status, people, notes 
           people,
           notes,
           created_by_user_id: createdByUserId,
-          created_by_user_name: createdByUserName
+          created_by_user_name: createdByUserName,
+          billed_amount: billedAmount || 0
         }]);
 
       if (error) throw error;

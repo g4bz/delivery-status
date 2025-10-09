@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, Edit2, CheckCircle, AlertCircle, XCircle, MessageSquare, ChevronDown, ChevronRight, Download, Save, LogOut, Bell, LayoutDashboard, TrendingUp, Users, Trash2 } from 'lucide-react';
+import { Plus, Edit2, CheckCircle, AlertCircle, XCircle, MessageSquare, ChevronDown, ChevronRight, Download, Save, LogOut, Bell, LayoutDashboard, TrendingUp, Users, Trash2, BarChart3 } from 'lucide-react';
 import * as supabaseService from './supabase/supabaseService';
 import * as authService from './supabase/authService';
 import LoginPage from './components/LoginPage';
 import AccountsView from './components/AccountsView';
 import ManagerSummary from './components/ManagerSummary';
+import AccountAnalytics from './components/AccountAnalytics';
 
 // ============================================================================
 // CONSTANTS
@@ -222,7 +223,7 @@ const DeliveryManagerDashboard = () => {
   const [filterStatus, setFilterStatus] = useState('All');
   const [selectedWeek, setSelectedWeek] = useState(null);
   const [showEditWeekModal, setShowEditWeekModal] = useState(false);
-  const [editWeekData, setEditWeekData] = useState({ accountId: null, week: null, status: 'healthy', people: 0, notes: '' });
+  const [editWeekData, setEditWeekData] = useState({ accountId: null, week: null, status: 'healthy', people: 0, notes: '', billedAmount: 0 });
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [satisfactionScores, setSatisfactionScores] = useState([]);
 
@@ -268,11 +269,12 @@ const DeliveryManagerDashboard = () => {
         people: status.people || 0,
         notes: status.notes || '',
         createdByUserId: status.createdByUserId,
-        createdByUserName: status.createdByUserName
+        createdByUserName: status.createdByUserName,
+        billedAmount: status.billedAmount || 0
       };
     }
 
-    // Auto-carry forward people count from previous week
+    // Auto-carry forward people count and billed amount from previous week
     const allWeeks = weeks;
     const weekIndex = allWeeks.indexOf(week);
     if (weekIndex > 0) {
@@ -280,13 +282,18 @@ const DeliveryManagerDashboard = () => {
       for (let i = weekIndex - 1; i >= 0; i--) {
         const prevWeek = allWeeks[i];
         const prevStatus = statuses.find(s => s.accountId === accountId && s.week === prevWeek);
-        if (prevStatus && prevStatus.people > 0) {
-          return { status: 'healthy', people: prevStatus.people, notes: '' };
+        if (prevStatus && (prevStatus.people > 0 || prevStatus.billedAmount > 0)) {
+          return {
+            status: 'healthy',
+            people: prevStatus.people,
+            notes: '',
+            billedAmount: prevStatus.billedAmount || 0
+          };
         }
       }
     }
 
-    return { status: 'healthy', people: 0, notes: '' };
+    return { status: 'healthy', people: 0, notes: '', billedAmount: 0 };
   };
 
   const enrichedAccounts = useMemo(() => {
@@ -491,7 +498,7 @@ const DeliveryManagerDashboard = () => {
     }
   };
 
-  const handleUpdateWeekStatus = async (accountId, week, status, people, notes = '') => {
+  const handleUpdateWeekStatus = async (accountId, week, status, people, notes = '', billedAmount = null) => {
     await supabaseService.updateWeeklyStatus(
       accountId,
       week,
@@ -499,20 +506,28 @@ const DeliveryManagerDashboard = () => {
       people,
       notes,
       currentUser?.id || null,
-      currentUser?.fullName || currentUser?.username || 'Unknown'
+      currentUser?.fullName || currentUser?.username || 'Unknown',
+      billedAmount
     );
     await refreshData();
   };
 
   const handleSaveWeekEdit = async () => {
-    await handleUpdateWeekStatus(editWeekData.accountId, editWeekData.week, editWeekData.status, editWeekData.people, editWeekData.notes);
+    await handleUpdateWeekStatus(editWeekData.accountId, editWeekData.week, editWeekData.status, editWeekData.people, editWeekData.notes, editWeekData.billedAmount);
     setShowEditWeekModal(false);
   };
 
   const openEditWeekModal = (accountId, week) => {
     const weekData = getStatusForWeek(accountId, week);
-    setEditWeekData({ accountId, week, status: weekData.status, people: weekData.people, notes: weekData.notes || '' });
+    setEditWeekData({ accountId, week, status: weekData.status, people: weekData.people, notes: weekData.notes || '', billedAmount: weekData.billedAmount || 0 });
     setShowEditWeekModal(true);
+  };
+
+  const handleToggleStatus = async (e, accountId, week) => {
+    e.stopPropagation(); // Prevent modal from opening
+    const weekData = getStatusForWeek(accountId, week);
+    const newStatus = statusUtils.cycleStatus(weekData.status);
+    await handleUpdateWeekStatus(accountId, week, newStatus, weekData.people, weekData.notes, weekData.billedAmount);
   };
 
   const handleDeleteWeekNote = async (accountId, week) => {
@@ -728,8 +743,19 @@ const DeliveryManagerDashboard = () => {
               }`}
             >
               <TrendingUp className="w-4 h-4" />
-              Accounts Analytics
-            </button>           
+              Accounts
+            </button>
+            <button
+              onClick={() => setActiveTab('analytics')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+                activeTab === 'analytics'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4" />
+              Analytics
+            </button>
           </div>
           {activeTab === 'dashboard' && (
             <div className="flex gap-2">
@@ -941,7 +967,9 @@ const DeliveryManagerDashboard = () => {
                                 return (
                                   <td key={week} className={'px-2 py-3 cursor-pointer ' + statusUtils.getStatusColor(weekData.status)} onClick={() => openEditWeekModal(account.id, week)}>
                                     <div className="flex flex-col items-center justify-center">
-                                      {statusUtils.getStatusIcon(weekData.status)}
+                                      <div onClick={(e) => handleToggleStatus(e, account.id, week)} className="hover:scale-110 transition-transform">
+                                        {statusUtils.getStatusIcon(weekData.status)}
+                                      </div>
                                       <span className="text-xs font-semibold mt-1 text-gray-800">{weekData.people}</span>
                                     </div>
                                   </td>
@@ -961,7 +989,9 @@ const DeliveryManagerDashboard = () => {
                           return (
                             <td key={week} className={'px-4 py-3 cursor-pointer ' + statusUtils.getStatusColor(weekData.status)} onClick={() => openEditWeekModal(account.id, week)}>
                               <div className="flex flex-col items-center justify-center">
-                                {statusUtils.getStatusIcon(weekData.status)}
+                                <div onClick={(e) => handleToggleStatus(e, account.id, week)} className="hover:scale-110 transition-transform">
+                                  {statusUtils.getStatusIcon(weekData.status)}
+                                </div>
                                 <span className="text-xs font-semibold mt-1 text-gray-800">{weekData.people}</span>
                               </div>
                             </td>
@@ -1125,6 +1155,14 @@ const DeliveryManagerDashboard = () => {
             managers={managers}
             statuses={statuses}
             satisfactionScores={satisfactionScores}
+          />
+        )}
+
+        {/* Account Analytics View */}
+        {activeTab === 'analytics' && (
+          <AccountAnalytics
+            accounts={accounts}
+            statuses={statuses}
           />
         )}
 
@@ -1341,6 +1379,11 @@ const DeliveryManagerDashboard = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Number of People</label>
                   <input type="number" min="0" value={editWeekData.people} onChange={(e) => setEditWeekData({...editWeekData, people: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Billed Amount ($)</label>
+                  <input type="number" min="0" step="0.01" value={editWeekData.billedAmount} onChange={(e) => setEditWeekData({...editWeekData, billedAmount: parseFloat(e.target.value) || 0})} className="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="0.00" />
+                  <p className="text-xs text-gray-500 mt-1">Auto-carries forward to next weeks unless overridden</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
