@@ -59,13 +59,20 @@ const ManagerSummary = ({ accounts, managers, statuses, satisfactionScores }) =>
       if (accountScores.length > 0) {
         const avgScore = accountScores.reduce((sum, s) => sum + s.score, 0) / accountScores.length;
         groups[managerId].averageSatisfaction += avgScore;
+        // Track how many accounts have scores
+        if (!groups[managerId].accountsWithScores) {
+          groups[managerId].accountsWithScores = 0;
+        }
+        groups[managerId].accountsWithScores++;
       }
     });
 
-    // Calculate final averages
+    // Calculate final averages - only divide by accounts that have scores
     Object.values(groups).forEach(group => {
-      if (group.accountCount > 0) {
-        group.averageSatisfaction = (group.averageSatisfaction / group.accountCount).toFixed(1);
+      if (group.accountsWithScores > 0) {
+        group.averageSatisfaction = (group.averageSatisfaction / group.accountsWithScores).toFixed(1);
+      } else {
+        group.averageSatisfaction = 0;
       }
     });
 
@@ -138,9 +145,12 @@ const ManagerSummary = ({ accounts, managers, statuses, satisfactionScores }) =>
             <div>
               <div className="text-sm text-gray-600">Avg Satisfaction</div>
               <div className="text-2xl font-bold text-gray-900">
-                {managerGroups.length > 0
-                  ? (managerGroups.reduce((sum, g) => sum + parseFloat(g.averageSatisfaction || 0), 0) / managerGroups.length).toFixed(1)
-                  : '0.0'}
+                {(() => {
+                  const groupsWithScores = managerGroups.filter(g => parseFloat(g.averageSatisfaction || 0) > 0);
+                  return groupsWithScores.length > 0
+                    ? (groupsWithScores.reduce((sum, g) => sum + parseFloat(g.averageSatisfaction || 0), 0) / groupsWithScores.length).toFixed(1)
+                    : '0.0';
+                })()}
               </div>
             </div>
           </div>

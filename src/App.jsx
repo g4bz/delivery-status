@@ -633,13 +633,20 @@ const DeliveryManagerDashboard = () => {
         {/* Header with User Info and Notifications */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Delivery Management Dashboard</h1>
-              <p className="text-gray-600">Track account health and team performance</p>
+            <div className="flex items-center gap-4">
+              <img
+                src="/arkus-logo.webp"
+                alt="Arkus Nexus"
+                className="h-10 object-contain"
+              />
+              <div className="border-l-2 border-gray-300 pl-4">
+                <h1 className="text-2xl font-bold text-gray-900 mb-1">Delivery Management Dashboard</h1>
+                <p className="text-gray-600 text-sm">Track account health and team performance</p>
+              </div>
             </div>
             <div className="flex items-center gap-4">
               {/* User Info */}
-              <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-lg shadow">
+              <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-lg shadow border border-gray-200">
                 <div className="text-right">
                   <div className="text-sm font-medium text-gray-900">{currentUser.fullName || currentUser.username}</div>
                   <div className="text-xs text-gray-500">{currentUser.email}</div>
@@ -726,13 +733,13 @@ const DeliveryManagerDashboard = () => {
           </div>
           {activeTab === 'dashboard' && (
             <div className="flex gap-2">
-              <button onClick={() => { setModalData({ name: '', managerId: managers[0]?.id || '', people: 1 }); setShowModal('addAccount'); }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              <button onClick={() => { setModalData({ name: '', managerId: managers[0]?.id || '', people: 1 }); setShowModal('addAccount'); }} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 shadow-md transition-all">
                 <Plus className="w-4 h-4" />Add Account
               </button>
-              <button onClick={() => { setModalData({ accountId: enrichedAccounts[0]?.id || '', managerId: managers[0]?.id || '', description: '', dueDate: '', priority: 'medium' }); setShowModal('addActionItem'); }} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+              <button onClick={() => { setModalData({ accountId: enrichedAccounts[0]?.id || '', managerId: managers[0]?.id || '', description: '', dueDate: '', priority: 'medium' }); setShowModal('addActionItem'); }} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 shadow-md transition-all">
                 <Plus className="w-4 h-4" />Add Action
               </button>
-              <button onClick={exportData} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700">
+              <button onClick={exportData} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-lg hover:from-gray-700 hover:to-gray-800 shadow-md transition-all">
                 <Download className="w-4 h-4" />Export
               </button>
             </div>
@@ -1154,9 +1161,10 @@ const DeliveryManagerDashboard = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Language Stack (comma-separated)</label>
                   <input
                     type="text"
-                    value={modalData.languageStack?.join(', ') || ''}
+                    value={modalData.languageStackInput !== undefined ? modalData.languageStackInput : (modalData.languageStack?.join(', ') || '')}
                     onChange={(e) => setModalData({
                       ...modalData,
+                      languageStackInput: e.target.value,
                       languageStack: e.target.value.split(',').map(s => s.trim()).filter(s => s)
                     })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
@@ -1207,9 +1215,10 @@ const DeliveryManagerDashboard = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Language Stack (comma-separated)</label>
                     <input
                       type="text"
-                      value={modalData.languageStack?.join(', ') || ''}
+                      value={modalData.languageStackInput !== undefined ? modalData.languageStackInput : (modalData.languageStack?.join(', ') || '')}
                       onChange={(e) => setModalData({
                         ...modalData,
+                        languageStackInput: e.target.value,
                         languageStack: e.target.value.split(',').map(s => s.trim()).filter(s => s)
                       })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md"
