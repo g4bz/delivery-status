@@ -240,6 +240,13 @@ const DeliveryManagerDashboard = () => {
     return [];
   }, [selectedQuarter, viewMode]);
 
+  // Auto-select first week when month or quarter changes
+  useEffect(() => {
+    if (weeks.length > 0) {
+      setSelectedWeek(weeks[0]);
+    }
+  }, [currentMonth, selectedQuarter, viewMode]);
+
   // Initialize collapsed months for past months
   useEffect(() => {
     if (viewMode === 'quarter' && monthsGrouped.length > 0) {
@@ -277,16 +284,52 @@ const DeliveryManagerDashboard = () => {
   };
 
   const enrichedAccounts = useMemo(() => {
+    // Determine the year from the selected viewing period
+    let displayYear;
+    if (selectedWeek) {
+      // Get year from selected week
+      displayYear = new Date(selectedWeek).getFullYear();
+    } else if (viewMode === 'month') {
+      // Get year from current month (format: YYYY-MM)
+      displayYear = parseInt(currentMonth.split('-')[0]);
+    } else if (viewMode === 'quarter') {
+      // Get year from selected quarter (format: Q1-YYYY)
+      displayYear = parseInt(selectedQuarter.split('-')[1]);
+    } else {
+      displayYear = new Date().getFullYear();
+    }
+
     return accounts.map(account => {
       const manager = managers.find(m => m.id === account.managerId);
       const accountActions = actionItems.filter(a => a.accountId === account.id);
+
+      // Get satisfaction scores for the display year from satisfaction_scores table
+      const displayYearScores = satisfactionScores.filter(s => s.accountId === account.id && s.year === displayYear);
+
+      // Only use satisfaction_scores table data - no fallback to old accounts table data
+      const satisfactionScore = {
+        Q1: displayYearScores.find(s => s.quarter === 1)?.score ?? null,
+        Q2: displayYearScores.find(s => s.quarter === 2)?.score ?? null,
+        Q3: displayYearScores.find(s => s.quarter === 3)?.score ?? null,
+        Q4: displayYearScores.find(s => s.quarter === 4)?.score ?? null
+      };
+      const quarterlyComments = {
+        Q1: displayYearScores.find(s => s.quarter === 1)?.comments || '',
+        Q2: displayYearScores.find(s => s.quarter === 2)?.comments || '',
+        Q3: displayYearScores.find(s => s.quarter === 3)?.comments || '',
+        Q4: displayYearScores.find(s => s.quarter === 4)?.comments || ''
+      };
+
       return {
         ...account,
+        satisfactionScore,
+        quarterlyComments,
+        displayYear,
         managerName: manager ? manager.name : 'Unassigned',
         actionItems: accountActions
       };
     });
-  }, [accounts, managers, actionItems]);
+  }, [accounts, managers, actionItems, satisfactionScores, selectedWeek, currentMonth, viewMode, selectedQuarter]);
 
   const filteredAccounts = useMemo(() => {
     return enrichedAccounts.filter(account => {
@@ -364,13 +407,43 @@ const DeliveryManagerDashboard = () => {
         languageStack: modalData.languageStack || []
       });
     } else if (showModal === 'editAccount') {
+      // Use the displayYear from modalData (the year being viewed)
+      const saveYear = modalData.displayYear || new Date().getFullYear();
+
+      // Update account basic info (without satisfaction scores)
       await supabaseService.updateAccount(modalData.id, {
-        ...modalData,
+        name: modalData.name,
+        managerId: modalData.managerId,
+        people: modalData.people,
         primaryLanguage: modalData.primaryLanguage || null,
         languageStack: modalData.languageStack || []
       });
+
+      // Upsert satisfaction scores for the display year
+      const quarters = [1, 2, 3, 4];
+      const quarterKeys = ['Q1', 'Q2', 'Q3', 'Q4'];
+
+      for (let i = 0; i < quarters.length; i++) {
+        const quarter = quarters[i];
+        const quarterKey = quarterKeys[i];
+        const score = modalData.satisfactionScore?.[quarterKey];
+        const comments = modalData.quarterlyComments?.[quarterKey] || '';
+
+        if (score !== null && score !== undefined && score !== '') {
+          await supabaseService.upsertSatisfactionScore(
+            modalData.id,
+            saveYear,
+            quarter,
+            parseInt(score),
+            comments
+          );
+        }
+      }
     }
     await refreshData();
+    // Reload satisfaction scores
+    const scores = await supabaseService.getSatisfactionScores();
+    setSatisfactionScores(scores);
     setShowModal(null);
   };
 
@@ -898,7 +971,7 @@ const DeliveryManagerDashboard = () => {
                               ) : <p className="text-sm text-gray-500">No action items</p>}
                             </div>
                             <div>
-                              <h4 className="text-sm font-semibold text-gray-900 mb-2">Quarterly Data</h4>
+                              <h4 className="text-sm font-semibold text-gray-900 mb-2">Quarterly Data - {account.displayYear}</h4>
                               <div className="bg-white p-3 rounded space-y-2">
                                 {CONSTANTS.QUARTERS.map(quarter => (
                                   <div key={quarter} className="text-sm">
@@ -907,6 +980,9 @@ const DeliveryManagerDashboard = () => {
                                     {account.quarterlyComments[quarter] && <p className="text-xs text-gray-600 mt-1">{account.quarterlyComments[quarter]}</p>}
                                   </div>
                                 ))}
+                              </div>
+                              <div className="mt-2 text-xs text-gray-500">
+                                View historical scores in the Accounts tab
                               </div>
                             </div>
                           </div>
@@ -1110,7 +1186,12 @@ const DeliveryManagerDashboard = () => {
                   )}
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold mb-3">Quarterly Satisfaction Scores</h3>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-lg font-semibold">Quarterly Satisfaction Scores - {modalData.displayYear || new Date().getFullYear()}</h3>
+                  </div>
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3 text-sm text-blue-800">
+                    <strong>Note:</strong> Scores are saved per year. These scores will be saved for {modalData.displayYear || new Date().getFullYear()}. Historical scores are preserved and can be viewed in the Accounts tab.
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     {CONSTANTS.QUARTERS.map(q => (
                       <div key={q}>
