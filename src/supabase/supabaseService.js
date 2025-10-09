@@ -209,7 +209,9 @@ export const getWeeklyStatuses = async () => {
       week: status.week,
       status: status.status,
       people: status.people,
-      notes: status.notes || ''
+      notes: status.notes || '',
+      createdByUserId: status.created_by_user_id,
+      createdByUserName: status.created_by_user_name
     }));
   } catch (error) {
     console.error('Error fetching weekly statuses:', error);
@@ -217,7 +219,7 @@ export const getWeeklyStatuses = async () => {
   }
 };
 
-export const updateWeeklyStatus = async (accountId, week, status, people, notes = '') => {
+export const updateWeeklyStatus = async (accountId, week, status, people, notes = '', createdByUserId = null, createdByUserName = null) => {
   try {
     // Check if status exists
     const { data: existing } = await supabase
@@ -237,7 +239,7 @@ export const updateWeeklyStatus = async (accountId, week, status, people, notes 
 
       if (error) throw error;
     } else {
-      // Insert new status
+      // Insert new status with user tracking
       const { error } = await supabase
         .from('weekly_statuses')
         .insert([{
@@ -245,7 +247,9 @@ export const updateWeeklyStatus = async (accountId, week, status, people, notes 
           week,
           status,
           people,
-          notes
+          notes,
+          created_by_user_id: createdByUserId,
+          created_by_user_name: createdByUserName
         }]);
 
       if (error) throw error;
@@ -298,7 +302,12 @@ export const getActionItems = async () => {
       dueDate: item.due_date,
       completed: item.completed,
       priority: item.priority,
-      createdDate: item.created_date
+      createdDate: item.created_date,
+      completedByUserId: item.completed_by_user_id,
+      completedByUserName: item.completed_by_user_name,
+      completedAt: item.completed_at,
+      createdByUserId: item.created_by_user_id,
+      createdByUserName: item.created_by_user_name
     }));
   } catch (error) {
     console.error('Error fetching action items:', error);
@@ -315,7 +324,9 @@ export const addActionItem = async (item) => {
       due_date: item.dueDate,
       completed: item.completed || false,
       priority: item.priority,
-      created_date: item.createdDate
+      created_date: item.createdDate,
+      created_by_user_id: item.createdByUserId || null,
+      created_by_user_name: item.createdByUserName || null
     };
 
     const { data, error } = await supabase
@@ -335,7 +346,9 @@ export const addActionItem = async (item) => {
       dueDate: data.due_date,
       completed: data.completed,
       priority: data.priority,
-      createdDate: data.created_date
+      createdDate: data.created_date,
+      createdByUserId: data.created_by_user_id,
+      createdByUserName: data.created_by_user_name
     };
   } catch (error) {
     console.error('Error adding action item:', error);
@@ -354,6 +367,9 @@ export const updateActionItem = async (id, updates) => {
     if (updates.completed !== undefined) dbUpdates.completed = updates.completed;
     if (updates.priority !== undefined) dbUpdates.priority = updates.priority;
     if (updates.createdDate !== undefined) dbUpdates.created_date = updates.createdDate;
+    if (updates.completedByUserId !== undefined) dbUpdates.completed_by_user_id = updates.completedByUserId;
+    if (updates.completedByUserName !== undefined) dbUpdates.completed_by_user_name = updates.completedByUserName;
+    if (updates.completedAt !== undefined) dbUpdates.completed_at = updates.completedAt;
 
     const { data, error } = await supabase
       .from('action_items')
@@ -373,7 +389,10 @@ export const updateActionItem = async (id, updates) => {
       dueDate: data.due_date,
       completed: data.completed,
       priority: data.priority,
-      createdDate: data.created_date
+      createdDate: data.created_date,
+      completedByUserId: data.completed_by_user_id,
+      completedByUserName: data.completed_by_user_name,
+      completedAt: data.completed_at
     };
   } catch (error) {
     console.error('Error updating action item:', error);

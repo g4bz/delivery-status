@@ -263,7 +263,13 @@ const DeliveryManagerDashboard = () => {
   const getStatusForWeek = (accountId, week) => {
     const status = statuses.find(s => s.accountId === accountId && s.week === week);
     if (status) {
-      return { status: status.status, people: status.people || 0, notes: status.notes || '' };
+      return {
+        status: status.status,
+        people: status.people || 0,
+        notes: status.notes || '',
+        createdByUserId: status.createdByUserId,
+        createdByUserName: status.createdByUserName
+      };
     }
 
     // Auto-carry forward people count from previous week
@@ -455,7 +461,9 @@ const DeliveryManagerDashboard = () => {
       dueDate: modalData.dueDate,
       priority: modalData.priority,
       completed: false,
-      createdDate: new Date().toISOString().split('T')[0]
+      createdDate: new Date().toISOString().split('T')[0],
+      createdByUserId: currentUser?.id || null,
+      createdByUserName: currentUser?.fullName || currentUser?.username || 'Unknown'
     });
     await refreshData();
     setShowModal(null);
@@ -464,13 +472,35 @@ const DeliveryManagerDashboard = () => {
   const handleToggleActionItem = async (itemId) => {
     const item = actionItems.find(i => i.id === itemId);
     if (item) {
-      await supabaseService.updateActionItem(itemId, { completed: !item.completed });
+      const updates = { completed: !item.completed };
+
+      // If marking as completed, add user and timestamp info
+      if (!item.completed) {
+        updates.completedByUserId = currentUser?.id || null;
+        updates.completedByUserName = currentUser?.fullName || currentUser?.username || 'Unknown';
+        updates.completedAt = new Date().toISOString();
+      } else {
+        // If uncompleting, clear the completion info
+        updates.completedByUserId = null;
+        updates.completedByUserName = null;
+        updates.completedAt = null;
+      }
+
+      await supabaseService.updateActionItem(itemId, updates);
       await refreshData();
     }
   };
 
   const handleUpdateWeekStatus = async (accountId, week, status, people, notes = '') => {
-    await supabaseService.updateWeeklyStatus(accountId, week, status, people, notes);
+    await supabaseService.updateWeeklyStatus(
+      accountId,
+      week,
+      status,
+      people,
+      notes,
+      currentUser?.id || null,
+      currentUser?.fullName || currentUser?.username || 'Unknown'
+    );
     await refreshData();
   };
 
@@ -957,11 +987,21 @@ const DeliveryManagerDashboard = () => {
                                             {isDueToday && <Bell className="w-4 h-4 text-red-600 animate-pulse flex-shrink-0" />}
                                             <p className={item.completed ? 'text-sm line-through text-gray-500' : 'text-sm text-gray-900'}>{item.description}</p>
                                           </div>
-                                          <div className="flex items-center gap-3 mt-1">
+                                          <div className="flex items-center gap-3 mt-1 flex-wrap">
                                             <span className={`text-xs ${isDueToday ? 'text-red-700 font-semibold' : 'text-gray-500'}`}>
                                               {isDueToday ? '⚠️ Due Today!' : item.dueDate}
                                             </span>
                                             <span className={'text-xs px-2 py-0.5 rounded ' + (item.priority === 'high' ? 'bg-red-100 text-red-700' : item.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-700')}>{item.priority}</span>
+                                            {item.createdByUserName && (
+                                              <span className="text-xs text-blue-600">
+                                                Created by {item.createdByUserName}
+                                              </span>
+                                            )}
+                                            {item.completed && item.completedByUserName && (
+                                              <span className="text-xs text-green-600">
+                                                ✓ Resolved by {item.completedByUserName} on {new Date(item.completedAt).toLocaleDateString()} at {new Date(item.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                              </span>
+                                            )}
                                           </div>
                                         </div>
                                       </div>
@@ -1003,7 +1043,12 @@ const DeliveryManagerDashboard = () => {
                                       <div key={week} className="text-sm border-b border-gray-200 pb-2 last:border-b-0">
                                         <div className="flex items-start justify-between gap-2">
                                           <div className="flex-1">
-                                            <span className="font-medium text-gray-700">{dateUtils.formatWeekDisplay(week)}:</span>
+                                            <div className="flex items-center gap-2">
+                                              <span className="font-medium text-gray-700">{dateUtils.formatWeekDisplay(week)}:</span>
+                                              {weekData.createdByUserName && (
+                                                <span className="text-xs text-gray-500">by {weekData.createdByUserName}</span>
+                                              )}
+                                            </div>
                                             <p className="text-gray-900 mt-1">{weekData.notes}</p>
                                           </div>
                                           <div className="flex items-center gap-1 flex-shrink-0">
