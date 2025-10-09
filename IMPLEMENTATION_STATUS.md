@@ -220,7 +220,7 @@ delivery-dashboard/
 - account_id (FK to accounts)
 - year (INTEGER) - e.g., 2024, 2025
 - quarter (INTEGER) - 1, 2, 3, or 4
-- score (INTEGER) - 1 to 10
+- score (INTEGER) - 1 to 100
 - comments (TEXT)
 - UNIQUE(account_id, year, quarter)
 ```

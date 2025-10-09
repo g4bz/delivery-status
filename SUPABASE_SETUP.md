@@ -129,7 +129,7 @@ Stores client accounts
 - name (VARCHAR)
 - manager_id (UUID, foreign key → delivery_managers)
 - people (INTEGER)
-- satisfaction_score_q1/q2/q3/q4 (INTEGER, 1-10)
+- satisfaction_score_q1/q2/q3/q4 (INTEGER, 1-100)
 - quarterly_comment_q1/q2/q3/q4 (TEXT)
 - created_at (TIMESTAMP)
 - updated_at (TIMESTAMP)

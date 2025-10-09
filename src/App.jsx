@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, Edit2, CheckCircle, AlertCircle, XCircle, MessageSquare, ChevronDown, ChevronRight, Download, Save, LogOut, Bell, LayoutDashboard, TrendingUp, Users } from 'lucide-react';
+import { Plus, Edit2, CheckCircle, AlertCircle, XCircle, MessageSquare, ChevronDown, ChevronRight, Download, Save, LogOut, Bell, LayoutDashboard, TrendingUp, Users, Trash2 } from 'lucide-react';
 import * as supabaseService from './supabase/supabaseService';
 import * as authService from './supabase/authService';
 import LoginPage from './components/LoginPage';
@@ -215,6 +215,7 @@ const DeliveryManagerDashboard = () => {
   const [selectedQuarter, setSelectedQuarter] = useState(dateUtils.getCurrentQuarter());
   const [expandedAccounts, setExpandedAccounts] = useState({});
   const [collapsedMonths, setCollapsedMonths] = useState({});
+  const [expandedWeeklyNotes, setExpandedWeeklyNotes] = useState({});
   const [showModal, setShowModal] = useState(null);
   const [modalData, setModalData] = useState({});
   const [filterManager, setFilterManager] = useState('All');
@@ -255,7 +256,7 @@ const DeliveryManagerDashboard = () => {
   const getStatusForWeek = (accountId, week) => {
     const status = statuses.find(s => s.accountId === accountId && s.week === week);
     if (status) {
-      return { status: status.status, people: status.people || 0 };
+      return { status: status.status, people: status.people || 0, notes: status.notes || '' };
     }
 
     // Auto-carry forward people count from previous week
@@ -267,12 +268,12 @@ const DeliveryManagerDashboard = () => {
         const prevWeek = allWeeks[i];
         const prevStatus = statuses.find(s => s.accountId === accountId && s.week === prevWeek);
         if (prevStatus && prevStatus.people > 0) {
-          return { status: 'healthy', people: prevStatus.people };
+          return { status: 'healthy', people: prevStatus.people, notes: '' };
         }
       }
     }
 
-    return { status: 'healthy', people: 0 };
+    return { status: 'healthy', people: 0, notes: '' };
   };
 
   const enrichedAccounts = useMemo(() => {
@@ -325,53 +326,31 @@ const DeliveryManagerDashboard = () => {
   const summaryStats = useMemo(() => {
     if (!selectedWeek) return { total: 0, healthy: 0, attention: 0, critical: 0, totalPeople: 0, pendingActions: 0 };
 
-    // Determine which weeks to include based on view mode
-    let weeksToAnalyze = [];
-    if (viewMode === 'month') {
-      weeksToAnalyze = dateUtils.generateWeeksForMonth(currentMonth);
-    } else {
-      // For quarterly view, use the month of the selected week
-      const selectedMonth = dateUtils.getMonthFromWeek(selectedWeek);
-      weeksToAnalyze = dateUtils.generateWeeksForMonth(selectedMonth);
-    }
+    // Calculate stats for the selected week only
+    const selectedWeekStatuses = enrichedAccounts.map(account =>
+      getStatusForWeek(account.id, selectedWeek)
+    );
 
-    // Calculate stats across all weeks in the period
-    const allStatusData = [];
-    enrichedAccounts.forEach(account => {
-      weeksToAnalyze.forEach(week => {
-        const weekData = getStatusForWeek(account.id, week);
-        allStatusData.push({ ...weekData, accountId: account.id, week });
-      });
-    });
+    // Filter action items for the selected week
+    const weekStart = new Date(selectedWeek);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
 
-    // Get most recent status per account
-    const latestStatusPerAccount = {};
-    enrichedAccounts.forEach(account => {
-      const accountStatuses = allStatusData.filter(s => s.accountId === account.id);
-      if (accountStatuses.length > 0) {
-        latestStatusPerAccount[account.id] = accountStatuses[accountStatuses.length - 1];
-      }
-    });
-
-    const latestStatuses = Object.values(latestStatusPerAccount);
-
-    // Filter action items by the selected period
-    const periodActionItems = actionItems.filter(item => {
+    const weekActionItems = actionItems.filter(item => {
       if (item.completed) return false;
-      const itemWeek = dateUtils.getMonthFromWeek(item.dueDate);
-      const targetMonth = viewMode === 'month' ? currentMonth : dateUtils.getMonthFromWeek(selectedWeek);
-      return itemWeek === targetMonth;
+      const dueDate = new Date(item.dueDate);
+      return dueDate >= weekStart && dueDate <= weekEnd;
     });
 
     return {
       total: enrichedAccounts.length,
-      healthy: latestStatuses.filter(s => s.status === 'healthy').length,
-      attention: latestStatuses.filter(s => s.status === 'attention').length,
-      critical: latestStatuses.filter(s => s.status === 'critical').length,
-      totalPeople: latestStatuses.reduce((sum, s) => sum + s.people, 0),
-      pendingActions: periodActionItems.length
+      healthy: selectedWeekStatuses.filter(s => s.status === 'healthy').length,
+      attention: selectedWeekStatuses.filter(s => s.status === 'attention').length,
+      critical: selectedWeekStatuses.filter(s => s.status === 'critical').length,
+      totalPeople: selectedWeekStatuses.reduce((sum, s) => sum + s.people, 0),
+      pendingActions: weekActionItems.length
     };
-  }, [enrichedAccounts, selectedWeek, currentMonth, viewMode, actionItems, statuses]);
+  }, [enrichedAccounts, selectedWeek, actionItems, statuses]);
 
   const handleSaveAccount = async () => {
     if (showModal === 'addAccount') {
@@ -431,6 +410,13 @@ const DeliveryManagerDashboard = () => {
     const weekData = getStatusForWeek(accountId, week);
     setEditWeekData({ accountId, week, status: weekData.status, people: weekData.people, notes: weekData.notes || '' });
     setShowEditWeekModal(true);
+  };
+
+  const handleDeleteWeekNote = async (accountId, week) => {
+    if (window.confirm('Are you sure you want to delete this note? This will remove the entire weekly status entry.')) {
+      await supabaseService.deleteWeeklyStatus(accountId, week);
+      await refreshData();
+    }
   };
 
   const exportData = () => {
@@ -749,7 +735,7 @@ const DeliveryManagerDashboard = () => {
                   </th>
                   <th
                     onClick={() => handleSort('name')}
-                    className="px-4 py-3 text-left text-sm font-semibold sticky left-[120px] bg-gray-800 z-20 cursor-pointer hover:bg-gray-700 select-none"
+                    className="px-4 py-3 text-left text-sm font-semibold sticky bg-gray-800 z-20 cursor-pointer hover:bg-gray-700 select-none"
                   >
                     <div className="flex items-center gap-2">
                       Account
@@ -777,7 +763,12 @@ const DeliveryManagerDashboard = () => {
                   ) : (
                     // Monthly view with week headers
                     weeks.map(week => (
-                      <th key={week} className="px-4 py-3 text-center text-sm font-semibold min-w-[100px]">
+                      <th
+                        key={week}
+                        className={`px-4 py-3 text-center text-sm font-semibold min-w-[100px] cursor-pointer hover:bg-gray-700 transition-colors ${selectedWeek === week ? 'bg-blue-600' : ''}`}
+                        onClick={() => setSelectedWeek(week)}
+                        title="Click to filter by this week"
+                      >
                         {dateUtils.formatWeekDisplay(week)}
                       </th>
                     ))
@@ -788,12 +779,17 @@ const DeliveryManagerDashboard = () => {
                   // Week headers for uncollapsed months in quarterly view
                   <tr>
                     <th className="sticky left-0 bg-gray-800 z-20"></th>
-                    <th className="sticky left-[120px] bg-gray-800 z-20"></th>
+                    <th className="sticky bg-gray-800 z-20"></th>
                     {monthsGrouped.map(monthData => (
                       <React.Fragment key={`weeks-${monthData.month}`}>
                         {!collapsedMonths[monthData.month] ? (
                           monthData.weeks.map(week => (
-                            <th key={week} className="px-2 py-2 text-center text-xs font-normal min-w-[80px]">
+                            <th
+                              key={week}
+                              className={`px-2 py-2 text-center text-xs font-normal min-w-[80px] cursor-pointer hover:bg-gray-700 transition-colors ${selectedWeek === week ? 'bg-blue-600' : ''}`}
+                              onClick={() => setSelectedWeek(week)}
+                              title="Click to filter by this week"
+                            >
                               {dateUtils.formatWeekDisplay(week)}
                             </th>
                           ))
@@ -871,7 +867,7 @@ const DeliveryManagerDashboard = () => {
                     {expandedAccounts[account.id] && (
                       <tr className="bg-blue-50">
                         <td colSpan={weeks.length + 4} className="px-4 py-4">
-                          <div className="grid grid-cols-2 gap-4">
+                          <div className="grid grid-cols-2 gap-4 mb-4">
                             <div>
                               <h4 className="text-sm font-semibold text-gray-900 mb-2">Action Items</h4>
                               {account.actionItems.length > 0 ? (
@@ -913,6 +909,54 @@ const DeliveryManagerDashboard = () => {
                                 ))}
                               </div>
                             </div>
+                          </div>
+                          <div>
+                            <div
+                              className="flex items-center gap-2 cursor-pointer mb-2"
+                              onClick={() => setExpandedWeeklyNotes(prev => ({ ...prev, [account.id]: !prev[account.id] }))}
+                            >
+                              {expandedWeeklyNotes[account.id] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                              <h4 className="text-sm font-semibold text-gray-900">Weekly Notes</h4>
+                            </div>
+                            {expandedWeeklyNotes[account.id] && (
+                              <div className="bg-white p-3 rounded space-y-2">
+                                {weeks.map(week => {
+                                  const weekData = getStatusForWeek(account.id, week);
+                                  if (weekData.notes) {
+                                    return (
+                                      <div key={week} className="text-sm border-b border-gray-200 pb-2 last:border-b-0">
+                                        <div className="flex items-start justify-between gap-2">
+                                          <div className="flex-1">
+                                            <span className="font-medium text-gray-700">{dateUtils.formatWeekDisplay(week)}:</span>
+                                            <p className="text-gray-900 mt-1">{weekData.notes}</p>
+                                          </div>
+                                          <div className="flex items-center gap-1 flex-shrink-0">
+                                            <button
+                                              onClick={() => openEditWeekModal(account.id, week)}
+                                              className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                              title="Edit note"
+                                            >
+                                              <Edit2 className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                              onClick={() => handleDeleteWeekNote(account.id, week)}
+                                              className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                              title="Delete note"
+                                            >
+                                              <Trash2 className="w-4 h-4" />
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                })}
+                                {weeks.every(week => !getStatusForWeek(account.id, week).notes) && (
+                                  <p className="text-sm text-gray-500">No weekly notes</p>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -1070,8 +1114,8 @@ const DeliveryManagerDashboard = () => {
                   <div className="grid grid-cols-2 gap-4">
                     {CONSTANTS.QUARTERS.map(q => (
                       <div key={q}>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">{q} Score (1-10)</label>
-                        <input type="number" min="1" max="10" value={modalData.satisfactionScore?.[q] || ''} onChange={(e) => setModalData({ ...modalData, satisfactionScore: { ...modalData.satisfactionScore, [q]: e.target.value ? parseInt(e.target.value) : null }})} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{q} Score (1-100)</label>
+                        <input type="number" min="1" max="100" value={modalData.satisfactionScore?.[q] || ''} onChange={(e) => setModalData({ ...modalData, satisfactionScore: { ...modalData.satisfactionScore, [q]: e.target.value ? parseInt(e.target.value) : null }})} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
                       </div>
                     ))}
                   </div>

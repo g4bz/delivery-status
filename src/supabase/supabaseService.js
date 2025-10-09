@@ -259,6 +259,24 @@ export const updateWeeklyStatus = async (accountId, week, status, people, notes 
   }
 };
 
+export const deleteWeeklyStatus = async (accountId, week) => {
+  try {
+    const { error } = await supabase
+      .from('weekly_statuses')
+      .delete()
+      .eq('account_id', accountId)
+      .eq('week', week);
+
+    if (error) throw error;
+
+    // Return all statuses
+    return getWeeklyStatuses();
+  } catch (error) {
+    console.error('Error deleting weekly status:', error);
+    throw error;
+  }
+};
+
 // ============================================================================
 // ACTION ITEMS
 // ============================================================================
