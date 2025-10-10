@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, Edit2, CheckCircle, AlertCircle, XCircle, MessageSquare, ChevronDown, ChevronRight, Download, Save, LogOut, Bell, LayoutDashboard, TrendingUp, Users, Trash2, BarChart3 } from 'lucide-react';
+import { Plus, Edit2, CheckCircle, AlertCircle, XCircle, MessageSquare, ChevronDown, ChevronRight, Download, Save, LogOut, Bell, LayoutDashboard, TrendingUp, Users, Trash2, BarChart3, ChevronLeft } from 'lucide-react';
 import * as supabaseService from './supabase/supabaseService';
 import * as authService from './supabase/authService';
 import LoginPage from './components/LoginPage';
@@ -233,6 +233,7 @@ const DeliveryManagerDashboard = () => {
   const [billingData, setBillingData] = useState({ accountId: null, month: '', amount: 0 });
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [satisfactionScores, setSatisfactionScores] = useState([]);
+  const [showAllActionItems, setShowAllActionItems] = useState(false);
 
   const weeks = useMemo(() => {
     if (viewMode === 'quarter') {
@@ -310,17 +311,24 @@ const DeliveryManagerDashboard = () => {
       };
     }
 
-    // Auto-carry forward people count and billed amount from previous week
+    // Auto-carry forward status, people count and billed amount from previous week in same month
     const allWeeks = weeks;
     const weekIndex = allWeeks.indexOf(week);
+    const currentMonth = dateUtils.getMonthFromWeek(week);
+
     if (weekIndex > 0) {
-      // Look for the most recent previous week with data
+      // Look for the most recent previous week with data in the same month
       for (let i = weekIndex - 1; i >= 0; i--) {
         const prevWeek = allWeeks[i];
+        const prevMonth = dateUtils.getMonthFromWeek(prevWeek);
+
+        // Only carry forward within the same month
+        if (prevMonth !== currentMonth) break;
+
         const prevStatus = statuses.find(s => s.accountId === accountId && s.week === prevWeek);
-        if (prevStatus && (prevStatus.people > 0 || prevStatus.billedAmount > 0)) {
+        if (prevStatus && (prevStatus.people > 0 || prevStatus.billedAmount > 0 || prevStatus.status !== 'healthy')) {
           return {
-            status: 'healthy',
+            status: prevStatus.status || 'healthy',
             people: prevStatus.people,
             notes: '',
             billedAmount: prevStatus.billedAmount || 0
@@ -548,7 +556,31 @@ const DeliveryManagerDashboard = () => {
   };
 
   const handleSaveWeekEdit = async () => {
+    // Update current week
     await handleUpdateWeekStatus(editWeekData.accountId, editWeekData.week, editWeekData.status, editWeekData.people, editWeekData.notes);
+
+    // Update ALL subsequent weeks in the same month (override any existing data)
+    const allWeeks = weeks;
+    const weekIndex = allWeeks.indexOf(editWeekData.week);
+    const currentMonth = dateUtils.getMonthFromWeek(editWeekData.week);
+
+    if (weekIndex >= 0 && weekIndex < allWeeks.length - 1) {
+      for (let i = weekIndex + 1; i < allWeeks.length; i++) {
+        const nextWeek = allWeeks[i];
+        const nextMonth = dateUtils.getMonthFromWeek(nextWeek);
+
+        // Stop if we've moved to a different month
+        if (nextMonth !== currentMonth) break;
+
+        // Get existing notes for the next week to preserve them
+        const existingStatus = statuses.find(s => s.accountId === editWeekData.accountId && s.week === nextWeek);
+        const nextWeekNotes = existingStatus ? existingStatus.notes : '';
+
+        // Always update the status and people count, preserving only the notes
+        await handleUpdateWeekStatus(editWeekData.accountId, nextWeek, editWeekData.status, editWeekData.people, nextWeekNotes);
+      }
+    }
+
     setShowEditWeekModal(false);
   };
 
@@ -562,7 +594,32 @@ const DeliveryManagerDashboard = () => {
     e.stopPropagation(); // Prevent modal from opening
     const weekData = getStatusForWeek(accountId, week);
     const newStatus = statusUtils.cycleStatus(weekData.status);
+
+    // Update current week
     await handleUpdateWeekStatus(accountId, week, newStatus, weekData.people, weekData.notes);
+
+    // Update ALL subsequent weeks in the same month (override any existing data)
+    const allWeeks = weeks;
+    const weekIndex = allWeeks.indexOf(week);
+    const currentMonth = dateUtils.getMonthFromWeek(week);
+
+    if (weekIndex >= 0 && weekIndex < allWeeks.length - 1) {
+      for (let i = weekIndex + 1; i < allWeeks.length; i++) {
+        const nextWeek = allWeeks[i];
+        const nextMonth = dateUtils.getMonthFromWeek(nextWeek);
+
+        // Stop if we've moved to a different month
+        if (nextMonth !== currentMonth) break;
+
+        // Get existing data for the next week to preserve people count and notes
+        const existingStatus = statuses.find(s => s.accountId === accountId && s.week === nextWeek);
+        const nextWeekPeople = existingStatus ? existingStatus.people : weekData.people;
+        const nextWeekNotes = existingStatus ? existingStatus.notes : '';
+
+        // Always update the status, even if explicit data exists
+        await handleUpdateWeekStatus(accountId, nextWeek, newStatus, nextWeekPeople, nextWeekNotes);
+      }
+    }
   };
 
   const handleDeleteWeekNote = async (accountId, week) => {
@@ -674,6 +731,71 @@ const DeliveryManagerDashboard = () => {
     return notifications.some(n => n.accountId === accountId);
   };
 
+  // Check if a week has any action items due
+  const weekHasActionItems = (week) => {
+    const weekStart = new Date(week);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+
+    return actionItems.some(item => {
+      if (item.completed) return false;
+      const dueDate = new Date(item.dueDate);
+      return dueDate >= weekStart && dueDate <= weekEnd;
+    });
+  };
+
+  // Navigate to previous month
+  const goToPreviousMonth = () => {
+    const [year, month] = currentMonth.split('-').map(Number);
+    const date = new Date(year, month - 1, 1);
+    date.setMonth(date.getMonth() - 1);
+    const newMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    setCurrentMonth(newMonth);
+  };
+
+  // Navigate to next month
+  const goToNextMonth = () => {
+    const [year, month] = currentMonth.split('-').map(Number);
+    const date = new Date(year, month - 1, 1);
+    date.setMonth(date.getMonth() + 1);
+    const newMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    setCurrentMonth(newMonth);
+  };
+
+  // Navigate to previous quarter
+  const goToPreviousQuarter = () => {
+    const [quarter, year] = selectedQuarter.split('-');
+    const quarterNum = parseInt(quarter.substring(1));
+    let newQuarter, newYear;
+
+    if (quarterNum === 1) {
+      newQuarter = 'Q4';
+      newYear = parseInt(year) - 1;
+    } else {
+      newQuarter = `Q${quarterNum - 1}`;
+      newYear = parseInt(year);
+    }
+
+    setSelectedQuarter(`${newQuarter}-${newYear}`);
+  };
+
+  // Navigate to next quarter
+  const goToNextQuarter = () => {
+    const [quarter, year] = selectedQuarter.split('-');
+    const quarterNum = parseInt(quarter.substring(1));
+    let newQuarter, newYear;
+
+    if (quarterNum === 4) {
+      newQuarter = 'Q1';
+      newYear = parseInt(year) + 1;
+    } else {
+      newQuarter = `Q${quarterNum + 1}`;
+      newYear = parseInt(year);
+    }
+
+    setSelectedQuarter(`${newQuarter}-${newYear}`);
+  };
+
   // Show login page if not authenticated
   if (isAuthChecking) {
     return (
@@ -733,39 +855,6 @@ const DeliveryManagerDashboard = () => {
               </div>
             </div>
           </div>
-
-          {/* Notifications Banner */}
-          {notifications.length > 0 && (
-            <div className="bg-orange-50 border-l-4 border-orange-500 p-4 mb-4 rounded-r-lg">
-              <div className="flex items-start gap-3">
-                <Bell className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5 animate-pulse" />
-                <div className="flex-1">
-                  <h3 className="text-sm font-semibold text-orange-900 mb-1">
-                    Action Items Due ({notifications.length})
-                  </h3>
-                  <div className="space-y-1">
-                    {notifications.slice(0, 3).map(notification => {
-                      const account = accounts.find(a => a.id === notification.accountId);
-                      const isToday = notification.dueDate === new Date().toISOString().split('T')[0];
-                      return (
-                        <div key={notification.id} className="text-sm text-orange-800">
-                          <span className="font-medium">{account?.name}</span> - {notification.description}
-                          <span className={`ml-2 text-xs px-2 py-0.5 rounded ${isToday ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>
-                            {isToday ? 'Due Today!' : `Due ${notification.dueDate}`}
-                          </span>
-                        </div>
-                      );
-                    })}
-                    {notifications.length > 3 && (
-                      <div className="text-xs text-orange-700 mt-1">
-                        +{notifications.length - 3} more action items due
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Tab Navigation */}
           <div className="flex gap-2 mb-4 bg-white rounded-lg shadow p-2">
@@ -832,6 +921,124 @@ const DeliveryManagerDashboard = () => {
         {/* Dashboard View */}
         {activeTab === 'dashboard' && (
           <>
+        {/* All Due Action Items Section - Filtered by Selected Week */}
+        {(() => {
+          // Filter action items by selected week
+          const weekStart = selectedWeek ? new Date(selectedWeek) : null;
+          const weekEnd = weekStart ? new Date(weekStart) : null;
+          if (weekEnd) {
+            weekEnd.setDate(weekEnd.getDate() + 6);
+          }
+
+          const weekActionItems = actionItems.filter(item => {
+            if (item.completed) return false;
+            if (!weekStart || !weekEnd) return false;
+            const dueDate = new Date(item.dueDate);
+            return dueDate >= weekStart && dueDate <= weekEnd;
+          });
+
+          return (
+            <div className="bg-white rounded-lg shadow mb-6">
+              <div
+                className="p-6 border-b border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors"
+                onClick={() => setShowAllActionItems(!showAllActionItems)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {showAllActionItems ? <ChevronDown className="w-5 h-5 text-gray-600" /> : <ChevronRight className="w-5 h-5 text-gray-600" />}
+                    <MessageSquare className="w-6 h-6 text-orange-600" />
+                    <h3 className="text-xl font-semibold text-gray-900">
+                      Action Items for Selected Week ({weekActionItems.length})
+                    </h3>
+                  </div>
+                  <span className="text-sm text-gray-600">
+                    {selectedWeek ? dateUtils.formatWeekDisplay(selectedWeek) : 'No week selected'}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-600 mt-1 ml-11">Click to {showAllActionItems ? 'collapse' : 'expand'}</p>
+              </div>
+              {showAllActionItems && (
+                <div className="p-6">
+                  {weekActionItems.length === 0 ? (
+                    <p className="text-gray-500 text-center py-8">No pending action items for this week</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {weekActionItems
+                        .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+                        .map(item => {
+                          const account = accounts.find(a => a.id === item.accountId);
+                          const manager = managers.find(m => m.id === item.managerId);
+                          const today = new Date().toISOString().split('T')[0];
+                          const isDueToday = item.dueDate === today;
+                          const isPastDue = item.dueDate < today;
+                          const isDueSoon = notifications.some(n => n.id === item.id);
+
+                          return (
+                            <div key={item.id} className={`flex items-start gap-3 p-4 rounded-lg border-2 ${
+                              isPastDue ? 'bg-red-50 border-red-400' :
+                              isDueToday ? 'bg-orange-50 border-orange-400' :
+                              isDueSoon ? 'bg-yellow-50 border-yellow-300' :
+                              'bg-gray-50 border-gray-200'
+                            }`}>
+                              <input
+                                type="checkbox"
+                                checked={item.completed}
+                                onChange={() => handleToggleActionItem(item.id)}
+                                className="mt-1 w-5 h-5 text-blue-600 rounded flex-shrink-0"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start gap-2 mb-2">
+                                  {(isDueToday || isPastDue) && <Bell className="w-5 h-5 text-red-600 animate-pulse flex-shrink-0" />}
+                                  <div className="flex-1">
+                                    <p className="text-sm font-medium text-gray-900">{item.description}</p>
+                                    <div className="flex items-center gap-3 mt-2 flex-wrap">
+                                      <span className="text-xs text-gray-700">
+                                        <strong>Account:</strong> {account?.name || 'Unknown'}
+                                      </span>
+                                      <span className="text-xs text-gray-700">
+                                        <strong>Manager:</strong> {manager?.name || 'Unknown'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-3 flex-wrap">
+                                  <span className={`text-xs font-semibold ${
+                                    isPastDue ? 'text-red-700 bg-red-100 px-2 py-1 rounded' :
+                                    isDueToday ? 'text-orange-700 bg-orange-100 px-2 py-1 rounded' :
+                                    'text-gray-600'
+                                  }`}>
+                                    {isPastDue ? `⚠️ Overdue: ${item.dueDate}` :
+                                     isDueToday ? '⚠️ Due Today!' :
+                                     `Due: ${item.dueDate}`}
+                                  </span>
+                                  <span className={`text-xs px-2 py-1 rounded font-medium ${
+                                    item.priority === 'high' ? 'bg-red-100 text-red-700' :
+                                    item.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                                    'bg-gray-100 text-gray-700'
+                                  }`}>
+                                    {item.priority}
+                                  </span>
+                                  {item.createdByUserName && (
+                                    <span className="text-xs text-blue-600">
+                                      Created by {item.createdByUserName}
+                                    </span>
+                                  )}
+                                  <span className="text-xs text-gray-500">
+                                    Created: {item.createdDate}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
           <div className="bg-white rounded-lg shadow p-4">
             <div className="text-sm text-gray-600 mb-1">Total Accounts</div>
@@ -860,6 +1067,36 @@ const DeliveryManagerDashboard = () => {
         </div>
 
         <div className="bg-white rounded-lg shadow p-4 mb-6">
+          {/* Quick Navigation Buttons */}
+          <div className="flex items-center justify-center gap-4 mb-4 pb-4 border-b border-gray-200">
+            <button
+              onClick={viewMode === 'month' ? goToPreviousMonth : goToPreviousQuarter}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow transition-all"
+              title={viewMode === 'month' ? 'Previous Month' : 'Previous Quarter'}
+            >
+              <ChevronLeft className="w-5 h-5" />
+              Previous
+            </button>
+            <div className="text-lg font-semibold text-gray-900 min-w-[200px] text-center">
+              {viewMode === 'month'
+                ? (() => {
+                    const [year, month] = currentMonth.split('-');
+                    const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+                    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                  })()
+                : selectedQuarter.split('-').reverse().join(' ')
+              }
+            </div>
+            <button
+              onClick={viewMode === 'month' ? goToNextMonth : goToNextQuarter}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow transition-all"
+              title={viewMode === 'month' ? 'Next Month' : 'Next Quarter'}
+            >
+              Next
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+
           <div className="flex flex-wrap gap-4">
             <div className="flex-1 min-w-[200px]">
               <label className="block text-sm font-medium text-gray-700 mb-2">View Mode</label>
@@ -888,7 +1125,14 @@ const DeliveryManagerDashboard = () => {
             <div className="flex-1 min-w-[200px]">
               <label className="block text-sm font-medium text-gray-700 mb-2">Week</label>
               <select value={selectedWeek || ''} onChange={(e) => setSelectedWeek(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md">
-                {weeks.map(week => <option key={week} value={week}>{dateUtils.formatWeekDisplay(week)}</option>)}
+                {weeks.map(week => {
+                  const hasItems = weekHasActionItems(week);
+                  return (
+                    <option key={week} value={week}>
+                      {hasItems ? '🔴 ' : ''}{dateUtils.formatWeekDisplay(week)}
+                    </option>
+                  );
+                })}
               </select>
             </div>
             <div className="flex-1 min-w-[200px]">
@@ -928,7 +1172,8 @@ const DeliveryManagerDashboard = () => {
                   </th>
                   <th
                     onClick={() => handleSort('name')}
-                    className="px-4 py-3 text-left text-sm font-semibold sticky bg-gray-800 z-20 cursor-pointer hover:bg-gray-700 select-none"
+                    className="px-4 py-3 text-left text-sm font-semibold sticky left-0 bg-gray-800 z-20 cursor-pointer hover:bg-gray-700 select-none"
+                    style={{ left: '120px' }}
                   >
                     <div className="flex items-center gap-2">
                       Account
@@ -972,7 +1217,7 @@ const DeliveryManagerDashboard = () => {
                   // Week headers for uncollapsed months in quarterly view
                   <tr>
                     <th className="sticky left-0 bg-gray-800 z-20"></th>
-                    <th className="sticky bg-gray-800 z-20"></th>
+                    <th className="sticky left-0 bg-gray-800 z-20" style={{ left: '120px' }}></th>
                     {monthsGrouped.map(monthData => (
                       <React.Fragment key={`weeks-${monthData.month}`}>
                         {!collapsedMonths[monthData.month] ? (
@@ -1000,7 +1245,7 @@ const DeliveryManagerDashboard = () => {
                   <React.Fragment key={account.id}>
                     <tr className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} border-b hover:bg-gray-100 ${hasNotifications(account.id) ? 'border-l-4 border-l-orange-500' : ''}`}>
                       <td className="px-4 py-3 text-sm font-medium text-gray-900 sticky left-0 bg-inherit z-10">{account.managerName}</td>
-                      <td className="px-4 py-3 bg-inherit z-10">
+                      <td className="px-4 py-3 sticky bg-inherit z-10" style={{ left: '120px' }}>
                         <div className="flex items-center gap-2">
                           {hasNotifications(account.id) && (
                             <Bell className="w-4 h-4 text-orange-600 animate-pulse" title="Has action items due" />
@@ -1245,6 +1490,7 @@ const DeliveryManagerDashboard = () => {
             managers={managers}
             statuses={statuses}
             satisfactionScores={satisfactionScores}
+            billing={billing}
           />
         )}
 

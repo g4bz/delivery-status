@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { Users, TrendingUp, Building2, ChevronDown, ChevronUp, Calendar } from 'lucide-react';
+import { Users, TrendingUp, Building2, ChevronDown, ChevronUp, Calendar, DollarSign } from 'lucide-react';
 
-const ManagerSummary = ({ accounts, managers, statuses, satisfactionScores }) => {
+const ManagerSummary = ({ accounts, managers, statuses, satisfactionScores, billing }) => {
   const [expandedManagers, setExpandedManagers] = useState({});
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
@@ -29,7 +29,8 @@ const ManagerSummary = ({ accounts, managers, statuses, satisfactionScores }) =>
         averageSatisfaction: 0,
         healthyCount: 0,
         attentionCount: 0,
-        criticalCount: 0
+        criticalCount: 0,
+        totalBilling: 0
       };
     });
 
@@ -42,7 +43,8 @@ const ManagerSummary = ({ accounts, managers, statuses, satisfactionScores }) =>
       averageSatisfaction: 0,
       healthyCount: 0,
       attentionCount: 0,
-      criticalCount: 0
+      criticalCount: 0,
+      totalBilling: 0
     };
 
     accounts.forEach(account => {
@@ -52,24 +54,42 @@ const ManagerSummary = ({ accounts, managers, statuses, satisfactionScores }) =>
       groups[managerId].accounts.push(account);
       groups[managerId].accountCount++;
 
-      // Filter statuses for selected month and year
-      const accountStatuses = statuses.filter(s => {
-        if (s.accountId !== account.id) return false;
-        const statusDate = new Date(s.week);
-        return statusDate.getFullYear() === selectedYear &&
-               statusDate.getMonth() + 1 === selectedMonth;
-      });
+      // Get all statuses for this account sorted by week
+      const allAccountStatuses = statuses
+        .filter(s => s.accountId === account.id)
+        .sort((a, b) => a.week.localeCompare(b.week));
 
-      if (accountStatuses.length > 0) {
-        const latestStatus = accountStatuses.reduce((latest, current) =>
-          current.week > latest.week ? current : latest
-        );
+      // Find the most recent status up to and including the selected month
+      const targetMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+      let latestStatus = null;
+
+      for (let i = allAccountStatuses.length - 1; i >= 0; i--) {
+        const statusWeek = allAccountStatuses[i].week;
+        const statusMonth = statusWeek.substring(0, 7); // YYYY-MM format
+
+        // Include statuses from the target month or earlier
+        if (statusMonth <= targetMonth) {
+          latestStatus = allAccountStatuses[i];
+          break;
+        }
+      }
+
+      if (latestStatus) {
         groups[managerId].totalPeople += latestStatus.people || 0;
 
         // Count health status
         if (latestStatus.status === 'healthy') groups[managerId].healthyCount++;
         else if (latestStatus.status === 'attention') groups[managerId].attentionCount++;
         else if (latestStatus.status === 'critical') groups[managerId].criticalCount++;
+      }
+
+      // Calculate billing for the selected month
+      const billingMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
+      const accountBilling = billing.find(b =>
+        b.accountId === account.id && b.billingMonth === billingMonth
+      );
+      if (accountBilling) {
+        groups[managerId].totalBilling += accountBilling.billedAmount || 0;
       }
 
       // Calculate average satisfaction for this account (filter by year)
@@ -100,7 +120,7 @@ const ManagerSummary = ({ accounts, managers, statuses, satisfactionScores }) =>
     return Object.values(groups)
       .filter(g => g.accountCount > 0)
       .sort((a, b) => a.manager.name.localeCompare(b.manager.name));
-  }, [accounts, managers, statuses, satisfactionScores, selectedYear, selectedMonth]);
+  }, [accounts, managers, statuses, satisfactionScores, billing, selectedYear, selectedMonth]);
 
   const toggleManager = (managerId) => {
     setExpandedManagers(prev => ({
@@ -170,7 +190,7 @@ const ManagerSummary = ({ accounts, managers, statuses, satisfactionScores }) =>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg shadow p-6 border-l-4 border-blue-500">
           <div className="flex items-center gap-3">
             <Users className="w-8 h-8 text-blue-600" />
@@ -221,6 +241,18 @@ const ManagerSummary = ({ accounts, managers, statuses, satisfactionScores }) =>
             </div>
           </div>
         </div>
+
+        <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-lg shadow p-6 border-l-4 border-emerald-500">
+          <div className="flex items-center gap-3">
+            <DollarSign className="w-8 h-8 text-emerald-600" />
+            <div>
+              <div className="text-sm text-gray-600">Total Billing</div>
+              <div className="text-2xl font-bold text-gray-900">
+                ${managerGroups.reduce((sum, g) => sum + g.totalBilling, 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Manager Cards */}
@@ -245,6 +277,9 @@ const ManagerSummary = ({ accounts, managers, statuses, satisfactionScores }) =>
                       <h3 className="text-xl font-bold text-gray-900">{group.manager.name}</h3>
                       <div className="text-sm text-gray-600 mt-1">
                         {group.accountCount} account{group.accountCount !== 1 ? 's' : ''} · {group.totalPeople} people
+                      </div>
+                      <div className="text-sm font-semibold text-emerald-600 mt-1">
+                        ${group.totalBilling.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} billing
                       </div>
                     </div>
                   </div>
@@ -293,13 +328,23 @@ const ManagerSummary = ({ accounts, managers, statuses, satisfactionScores }) =>
                 <div className="px-6 pb-6 border-t">
                   <div className="mt-4 space-y-3">
                     {group.accounts.map(account => {
-                      // Get latest status for this account
-                      const accountStatuses = statuses.filter(s => s.accountId === account.id);
-                      const latestStatus = accountStatuses.length > 0
-                        ? accountStatuses.reduce((latest, current) =>
-                            current.week > latest.week ? current : latest
-                          )
-                        : null;
+                      // Get latest status for this account up to the selected month
+                      const allAccountStatuses = statuses
+                        .filter(s => s.accountId === account.id)
+                        .sort((a, b) => a.week.localeCompare(b.week));
+
+                      const targetMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+                      let latestStatus = null;
+
+                      for (let i = allAccountStatuses.length - 1; i >= 0; i--) {
+                        const statusWeek = allAccountStatuses[i].week;
+                        const statusMonth = statusWeek.substring(0, 7);
+
+                        if (statusMonth <= targetMonth) {
+                          latestStatus = allAccountStatuses[i];
+                          break;
+                        }
+                      }
 
                       // Get latest satisfaction score
                       const accountScores = satisfactionScores.filter(s => s.accountId === account.id);
@@ -310,6 +355,12 @@ const ManagerSummary = ({ accounts, managers, statuses, satisfactionScores }) =>
                               : latest
                           )
                         : null;
+
+                      // Get billing for selected month
+                      const billingMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
+                      const accountBilling = billing.find(b =>
+                        b.accountId === account.id && b.billingMonth === billingMonth
+                      );
 
                       const statusColors = {
                         healthy: 'bg-green-100 text-green-800 border-green-300',
@@ -343,6 +394,14 @@ const ManagerSummary = ({ accounts, managers, statuses, satisfactionScores }) =>
                                 {latestStatus.status.charAt(0).toUpperCase() + latestStatus.status.slice(1)}
                               </div>
                             )}
+
+                            {/* Billing Amount */}
+                            <div className="text-center px-3 py-1 bg-emerald-100 rounded-lg">
+                              <div className="text-lg font-bold text-emerald-700">
+                                ${(accountBilling?.billedAmount || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                              </div>
+                              <div className="text-xs text-gray-600">Billing</div>
+                            </div>
 
                             {/* Latest Satisfaction Score */}
                             {latestScore && (
