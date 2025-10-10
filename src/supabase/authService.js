@@ -1,4 +1,5 @@
 import { supabase } from './config';
+import * as presenceService from './presenceService';
 
 // ============================================================================
 // AUTHENTICATION SERVICE
@@ -42,9 +43,14 @@ export const login = async (username, password) => {
       username: data.username,
       fullName: data.full_name,
       email: data.email,
+      profilePicture: data.profile_picture,
+      initials: data.initials,
       loginTime: new Date().toISOString()
     };
     localStorage.setItem('user_session', JSON.stringify(userSession));
+
+    // Update user presence
+    await presenceService.updatePresence(data.id, userSession);
 
     return userSession;
   } catch (error) {
@@ -56,7 +62,12 @@ export const login = async (username, password) => {
 /**
  * Logout user
  */
-export const logout = () => {
+export const logout = async () => {
+  const currentUser = getCurrentUser();
+  if (currentUser && currentUser.id) {
+    // Remove user presence
+    await presenceService.removePresence(currentUser.id);
+  }
   localStorage.removeItem('user_session');
 };
 

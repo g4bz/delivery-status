@@ -2,11 +2,13 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, Edit2, CheckCircle, AlertCircle, XCircle, MessageSquare, ChevronDown, ChevronRight, Download, Save, LogOut, Bell, LayoutDashboard, TrendingUp, Users, Trash2, BarChart3, ChevronLeft } from 'lucide-react';
 import * as supabaseService from './supabase/supabaseService';
 import * as authService from './supabase/authService';
+import * as presenceService from './supabase/presenceService';
 import LoginPage from './components/LoginPage';
 import AccountsView from './components/AccountsView';
 import ManagerSummary from './components/ManagerSummary';
 import AccountAnalytics from './components/AccountAnalytics';
 import YearComparison from './components/YearComparison';
+import ActiveUsers from './components/ActiveUsers';
 
 // ============================================================================
 // CONSTANTS
@@ -682,6 +684,20 @@ const DeliveryManagerDashboard = () => {
     loadSatisfactionScores();
   }, []);
 
+  // Setup presence heartbeat
+  useEffect(() => {
+    if (!currentUser) return;
+
+    // Send heartbeat every 2 minutes to keep presence alive
+    const heartbeatInterval = setInterval(() => {
+      presenceService.sendHeartbeat(currentUser.id);
+    }, 120000); // 2 minutes
+
+    return () => {
+      clearInterval(heartbeatInterval);
+    };
+  }, [currentUser]);
+
   // Auto-select current week on mount
   useEffect(() => {
     if (weeks.length > 0 && !selectedWeek) {
@@ -704,8 +720,8 @@ const DeliveryManagerDashboard = () => {
   };
 
   // Handle logout
-  const handleLogout = () => {
-    authService.logout();
+  const handleLogout = async () => {
+    await authService.logout();
     setCurrentUser(null);
   };
 
@@ -840,6 +856,9 @@ const DeliveryManagerDashboard = () => {
               </div>
             </div>
             <div className="flex items-center gap-4">
+              {/* Active Users */}
+              <ActiveUsers currentUserId={currentUser.id} />
+
               {/* User Info */}
               <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-lg shadow border border-gray-200">
                 <div className="text-right">
