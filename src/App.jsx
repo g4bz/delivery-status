@@ -1173,7 +1173,7 @@ const DeliveryManagerDashboard = () => {
                 <tr>
                   <th
                     onClick={() => handleSort('managerName')}
-                    className="px-4 py-3 text-left text-sm font-semibold sticky left-0 bg-gray-800 z-20 cursor-pointer hover:bg-gray-700 select-none"
+                    className="px-4 py-3 text-left text-sm font-semibold sticky left-0 bg-gray-800 z-20 cursor-pointer hover:bg-gray-700 select-none min-w-[120px]"
                   >
                     <div className="flex items-center gap-2">
                       Manager
@@ -1228,7 +1228,7 @@ const DeliveryManagerDashboard = () => {
                 {viewMode === 'quarter' && (
                   // Week headers for uncollapsed months in quarterly view
                   <tr>
-                    <th className="sticky left-0 bg-gray-800 z-20"></th>
+                    <th className="sticky left-0 bg-gray-800 z-20 min-w-[120px]"></th>
                     <th className="sticky left-0 bg-gray-800 z-20" style={{ left: '120px' }}></th>
                     {monthsGrouped.map(monthData => (
                       <React.Fragment key={`weeks-${monthData.month}`}>
@@ -1256,8 +1256,8 @@ const DeliveryManagerDashboard = () => {
                 {sortedAccounts.map((account, idx) => (
                   <React.Fragment key={account.id}>
                     <tr className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} border-b hover:bg-gray-100 ${hasNotifications(account.id) ? 'border-l-4 border-l-orange-500' : ''}`}>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900 sticky left-0 bg-inherit z-10">{account.managerName}</td>
-                      <td className="px-4 py-3 sticky bg-inherit z-10" style={{ left: '120px' }}>
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900 sticky left-0 bg-inherit z-10 min-w-[120px]">{account.managerName}</td>
+                      <td className="px-4 py-3 sticky bg-inherit z-10 min-w-[180px]" style={{ left: '120px' }}>
                         <div className="flex items-center gap-2">
                           {hasNotifications(account.id) && (
                             <Bell className="w-4 h-4 text-orange-600 animate-pulse" title="Has action items due" />
