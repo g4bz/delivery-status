@@ -839,111 +839,134 @@ const DeliveryManagerDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 p-3 sm:p-4 md:p-6 safe-area-inset-top safe-area-inset-bottom mobile-text-rendering">
       <div className="max-w-7xl mx-auto">
         {/* Header with User Info and Notifications */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-4">
+        <div className="mb-4 md:mb-6">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 md:gap-4 mb-4">
+            <div className="flex items-center gap-2 md:gap-4 w-full md:w-auto">
               <img
                 src="/arkus-logo.webp"
                 alt="Arkus Nexus"
-                className="h-10 object-contain"
+                className="h-8 md:h-10 object-contain flex-shrink-0"
               />
-              <div className="border-l-2 border-gray-300 pl-4">
-                <h1 className="text-2xl font-bold text-gray-900 mb-1">Delivery Management Dashboard</h1>
-                <p className="text-gray-600 text-sm">Track account health and team performance</p>
+              <div className="md:border-l-2 md:border-gray-300 md:pl-4 flex-1 md:flex-none">
+                <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 mb-0.5 md:mb-1">Delivery Management Dashboard</h1>
+                <p className="text-gray-600 text-xs sm:text-sm hidden sm:block">Track account health and team performance</p>
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              {/* Active Users */}
-              <ActiveUsers currentUserId={currentUser.id} />
+            <div className="flex items-center gap-2 md:gap-4 w-full md:w-auto justify-end">
+              {/* Active Users - Hidden on small mobile */}
+              <div className="hidden sm:block">
+                <ActiveUsers currentUserId={currentUser.id} />
+              </div>
 
               {/* User Info */}
-              <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-lg shadow border border-gray-200">
-                <div className="text-right">
+              <div className="flex items-center gap-2 md:gap-3 px-2 md:px-4 py-2 bg-white rounded-lg shadow border border-gray-200">
+                <div className="text-right hidden sm:block">
                   <div className="text-sm font-medium text-gray-900">{currentUser.fullName || currentUser.username}</div>
                   <div className="text-xs text-gray-500">{currentUser.email}</div>
                 </div>
+                <div className="text-left sm:hidden">
+                  <div className="text-xs font-medium text-gray-900">{currentUser.fullName || currentUser.username}</div>
+                </div>
                 <button
                   onClick={handleLogout}
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition"
+                  className="flex items-center gap-1 md:gap-2 px-2 md:px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition touch-optimized"
                   title="Logout"
                 >
                   <LogOut className="w-4 h-4" />
+                  <span className="hidden md:inline text-xs">Logout</span>
                 </button>
               </div>
             </div>
           </div>
 
           {/* Tab Navigation */}
-          <div className="flex gap-2 mb-4 bg-white rounded-lg shadow p-2">
-            <button
-              onClick={() => setActiveTab('dashboard')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
-                activeTab === 'dashboard'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              <LayoutDashboard className="w-4 h-4" />
-              Dashboard
-            </button>
-             <button
-              onClick={() => setActiveTab('managers')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
-                activeTab === 'managers'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              <Users className="w-4 h-4" />
-              Manager Summary
-            </button>
-            <button
-              onClick={() => setActiveTab('accounts')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
-                activeTab === 'accounts'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              <TrendingUp className="w-4 h-4" />
-              Accounts
-            </button>
-            <button
-              onClick={() => setActiveTab('analytics')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
-                activeTab === 'analytics'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              <BarChart3 className="w-4 h-4" />
-              Analytics
-            </button>
-            <button
-              onClick={() => setActiveTab('comparison')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
-                activeTab === 'comparison'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              <TrendingUp className="w-4 h-4" />
-              Year Comparison
-            </button>
+          <div className="bg-white rounded-lg shadow p-2 mb-4 overflow-x-auto custom-scrollbar">
+            <div className="flex gap-1 md:gap-2 min-w-max md:min-w-0">
+              <button
+                onClick={() => setActiveTab('dashboard')}
+                className={`flex items-center gap-1 md:gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-lg transition whitespace-nowrap touch-optimized ${
+                  activeTab === 'dashboard'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <LayoutDashboard className="w-4 h-4 flex-shrink-0" />
+                <span className="text-sm md:text-base">Dashboard</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('managers')}
+                className={`flex items-center gap-1 md:gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-lg transition whitespace-nowrap touch-optimized ${
+                  activeTab === 'managers'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <Users className="w-4 h-4 flex-shrink-0" />
+                <span className="text-sm md:text-base hidden sm:inline">Manager Summary</span>
+                <span className="text-sm sm:hidden">Managers</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('accounts')}
+                className={`flex items-center gap-1 md:gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-lg transition whitespace-nowrap touch-optimized ${
+                  activeTab === 'accounts'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <TrendingUp className="w-4 h-4 flex-shrink-0" />
+                <span className="text-sm md:text-base">Accounts</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('analytics')}
+                className={`flex items-center gap-1 md:gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-lg transition whitespace-nowrap touch-optimized ${
+                  activeTab === 'analytics'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <BarChart3 className="w-4 h-4 flex-shrink-0" />
+                <span className="text-sm md:text-base">Analytics</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('comparison')}
+                className={`flex items-center gap-1 md:gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-lg transition whitespace-nowrap touch-optimized ${
+                  activeTab === 'comparison'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <TrendingUp className="w-4 h-4 flex-shrink-0" />
+                <span className="text-sm md:text-base hidden sm:inline">Year Comparison</span>
+                <span className="text-sm sm:hidden">Comparison</span>
+              </button>
+            </div>
           </div>
           {activeTab === 'dashboard' && (
-            <div className="flex gap-2">
-              <button onClick={() => { setModalData({ name: '', managerId: managers[0]?.id || '', people: 1 }); setShowModal('addAccount'); }} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 shadow-md transition-all">
-                <Plus className="w-4 h-4" />Add Account
+            <div className="flex flex-col sm:flex-row gap-2 overflow-x-auto custom-scrollbar">
+              <button
+                onClick={() => { setModalData({ name: '', managerId: managers[0]?.id || '', people: 1 }); setShowModal('addAccount'); }}
+                className="flex items-center justify-center gap-2 px-3 md:px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 shadow-md transition-all whitespace-nowrap touch-optimized text-sm md:text-base"
+              >
+                <Plus className="w-4 h-4 flex-shrink-0" />
+                <span>Add Account</span>
               </button>
-              <button onClick={() => { setModalData({ accountId: enrichedAccounts[0]?.id || '', managerId: managers[0]?.id || '', description: '', dueDate: '', priority: 'medium' }); setShowModal('addActionItem'); }} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 shadow-md transition-all">
-                <Plus className="w-4 h-4" />Add Action
+              <button
+                onClick={() => { setModalData({ accountId: enrichedAccounts[0]?.id || '', managerId: managers[0]?.id || '', description: '', dueDate: '', priority: 'medium' }); setShowModal('addActionItem'); }}
+                className="flex items-center justify-center gap-2 px-3 md:px-4 py-2.5 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 shadow-md transition-all whitespace-nowrap touch-optimized text-sm md:text-base"
+              >
+                <Plus className="w-4 h-4 flex-shrink-0" />
+                <span>Add Action</span>
               </button>
-              <button onClick={exportData} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-lg hover:from-gray-700 hover:to-gray-800 shadow-md transition-all">
-                <Download className="w-4 h-4" />Export
+              <button
+                onClick={exportData}
+                className="flex items-center justify-center gap-2 px-3 md:px-4 py-2.5 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-lg hover:from-gray-700 hover:to-gray-800 shadow-md transition-all whitespace-nowrap touch-optimized text-sm md:text-base"
+              >
+                <Download className="w-4 h-4 flex-shrink-0" />
+                <span className="hidden sm:inline">Export</span>
+                <span className="sm:hidden">Export</span>
               </button>
             </div>
           )}
@@ -1070,81 +1093,83 @@ const DeliveryManagerDashboard = () => {
           );
         })()}
 
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
-          <div className="bg-white rounded-lg shadow p-4">
-            <div className="text-sm text-gray-600 mb-1">Total Accounts</div>
-            <div className="text-2xl font-bold text-gray-900">{summaryStats.total}</div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-4 mb-4 md:mb-6">
+          <div className="bg-white rounded-lg shadow p-3 md:p-4">
+            <div className="text-xs sm:text-sm text-gray-600 mb-0.5 md:mb-1">Total Accounts</div>
+            <div className="text-xl sm:text-2xl font-bold text-gray-900">{summaryStats.total}</div>
           </div>
-          <div className="bg-green-50 rounded-lg shadow p-4">
-            <div className="text-sm text-green-700 mb-1">Healthy</div>
-            <div className="text-2xl font-bold text-green-700">{summaryStats.healthy}</div>
+          <div className="bg-green-50 rounded-lg shadow p-3 md:p-4">
+            <div className="text-xs sm:text-sm text-green-700 mb-0.5 md:mb-1">Healthy</div>
+            <div className="text-xl sm:text-2xl font-bold text-green-700">{summaryStats.healthy}</div>
           </div>
-          <div className="bg-yellow-50 rounded-lg shadow p-4">
-            <div className="text-sm text-yellow-700 mb-1">Attention</div>
-            <div className="text-2xl font-bold text-yellow-700">{summaryStats.attention}</div>
+          <div className="bg-yellow-50 rounded-lg shadow p-3 md:p-4">
+            <div className="text-xs sm:text-sm text-yellow-700 mb-0.5 md:mb-1">Attention</div>
+            <div className="text-xl sm:text-2xl font-bold text-yellow-700">{summaryStats.attention}</div>
           </div>
-          <div className="bg-red-50 rounded-lg shadow p-4">
-            <div className="text-sm text-red-700 mb-1">Critical</div>
-            <div className="text-2xl font-bold text-red-700">{summaryStats.critical}</div>
+          <div className="bg-red-50 rounded-lg shadow p-3 md:p-4">
+            <div className="text-xs sm:text-sm text-red-700 mb-0.5 md:mb-1">Critical</div>
+            <div className="text-xl sm:text-2xl font-bold text-red-700">{summaryStats.critical}</div>
           </div>
-          <div className="bg-blue-50 rounded-lg shadow p-4">
-            <div className="text-sm text-blue-700 mb-1">Total People</div>
-            <div className="text-2xl font-bold text-blue-700">{summaryStats.totalPeople}</div>
+          <div className="bg-blue-50 rounded-lg shadow p-3 md:p-4">
+            <div className="text-xs sm:text-sm text-blue-700 mb-0.5 md:mb-1">Total People</div>
+            <div className="text-xl sm:text-2xl font-bold text-blue-700">{summaryStats.totalPeople}</div>
           </div>
-          <div className="bg-purple-50 rounded-lg shadow p-4">
-            <div className="text-sm text-purple-700 mb-1">Pending Actions</div>
-            <div className="text-2xl font-bold text-purple-700">{summaryStats.pendingActions}</div>
+          <div className="bg-purple-50 rounded-lg shadow p-3 md:p-4">
+            <div className="text-xs sm:text-sm text-purple-700 mb-0.5 md:mb-1">Pending Actions</div>
+            <div className="text-xl sm:text-2xl font-bold text-purple-700">{summaryStats.pendingActions}</div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-4 mb-6">
+        <div className="bg-white rounded-lg shadow p-3 md:p-4 mb-4 md:mb-6">
           {/* Quick Navigation Buttons */}
-          <div className="flex items-center justify-center gap-4 mb-4 pb-4 border-b border-gray-200">
+          <div className="flex items-center justify-center gap-2 md:gap-4 mb-3 md:mb-4 pb-3 md:pb-4 border-b border-gray-200">
             <button
               onClick={viewMode === 'month' ? goToPreviousMonth : goToPreviousQuarter}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow transition-all"
+              className="flex items-center gap-1 md:gap-2 px-3 md:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow transition-all touch-optimized text-sm md:text-base"
               title={viewMode === 'month' ? 'Previous Month' : 'Previous Quarter'}
             >
-              <ChevronLeft className="w-5 h-5" />
-              Previous
+              <ChevronLeft className="w-4 h-4 md:w-5 md:h-5" />
+              <span className="hidden sm:inline">Previous</span>
+              <span className="sm:hidden">Prev</span>
             </button>
-            <div className="text-lg font-semibold text-gray-900 min-w-[200px] text-center">
+            <div className="text-base md:text-lg font-semibold text-gray-900 min-w-[140px] md:min-w-[200px] text-center flex-1 md:flex-none px-2">
               {viewMode === 'month'
                 ? (() => {
                     const [year, month] = currentMonth.split('-');
                     const date = new Date(parseInt(year), parseInt(month) - 1, 1);
-                    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
                   })()
                 : selectedQuarter.split('-').reverse().join(' ')
               }
             </div>
             <button
               onClick={viewMode === 'month' ? goToNextMonth : goToNextQuarter}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow transition-all"
+              className="flex items-center gap-1 md:gap-2 px-3 md:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow transition-all touch-optimized text-sm md:text-base"
               title={viewMode === 'month' ? 'Next Month' : 'Next Quarter'}
             >
-              Next
-              <ChevronRight className="w-5 h-5" />
+              <span className="hidden sm:inline">Next</span>
+              <span className="sm:hidden">Next</span>
+              <ChevronRight className="w-4 h-4 md:w-5 md:h-5" />
             </button>
           </div>
 
-          <div className="flex flex-wrap gap-4">
-            <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm font-medium text-gray-700 mb-2">View Mode</label>
-              <select value={viewMode} onChange={(e) => setViewMode(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
+            <div className="w-full">
+              <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1 md:mb-2">View Mode</label>
+              <select value={viewMode} onChange={(e) => setViewMode(e.target.value)} className="w-full px-3 py-2.5 text-sm md:text-base border border-gray-300 rounded-md touch-optimized">
                 <option value="month">Monthly View</option>
                 <option value="quarter">Quarterly View</option>
               </select>
             </div>
             {viewMode === 'month' ? (
-              <div className="flex-1 min-w-[200px]">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Month</label>
-                <input type="month" value={currentMonth} onChange={(e) => setCurrentMonth(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+              <div className="w-full">
+                <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1 md:mb-2">Month</label>
+                <input type="month" value={currentMonth} onChange={(e) => setCurrentMonth(e.target.value)} className="w-full px-3 py-2.5 text-sm md:text-base border border-gray-300 rounded-md touch-optimized" />
               </div>
             ) : (
-              <div className="flex-1 min-w-[200px]">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Quarter</label>
-                <select value={selectedQuarter} onChange={(e) => setSelectedQuarter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md">
+              <div className="w-full">
+                <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1 md:mb-2">Quarter</label>
+                <select value={selectedQuarter} onChange={(e) => setSelectedQuarter(e.target.value)} className="w-full px-3 py-2.5 text-sm md:text-base border border-gray-300 rounded-md touch-optimized">
                   <option value="Q1-2025">Q1 2025</option>
                   <option value="Q2-2025">Q2 2025</option>
                   <option value="Q3-2025">Q3 2025</option>
@@ -1153,9 +1178,9 @@ const DeliveryManagerDashboard = () => {
                 </select>
               </div>
             )}
-            <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Week</label>
-              <select value={selectedWeek || ''} onChange={(e) => setSelectedWeek(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md">
+            <div className="w-full">
+              <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1 md:mb-2">Week</label>
+              <select value={selectedWeek || ''} onChange={(e) => setSelectedWeek(e.target.value)} className="w-full px-3 py-2.5 text-sm md:text-base border border-gray-300 rounded-md touch-optimized">
                 {weeks.map(week => {
                   const hasItems = weekHasActionItems(week);
                   return (
@@ -1166,16 +1191,16 @@ const DeliveryManagerDashboard = () => {
                 })}
               </select>
             </div>
-            <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Manager</label>
-              <select value={filterManager} onChange={(e) => setFilterManager(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md">
+            <div className="w-full">
+              <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1 md:mb-2">Manager</label>
+              <select value={filterManager} onChange={(e) => setFilterManager(e.target.value)} className="w-full px-3 py-2.5 text-sm md:text-base border border-gray-300 rounded-md touch-optimized">
                 <option value="All">All Managers</option>
                 {managers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
               </select>
             </div>
-            <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md">
+            <div className="w-full">
+              <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1 md:mb-2">Status</label>
+              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full px-3 py-2.5 text-sm md:text-base border border-gray-300 rounded-md touch-optimized">
                 <option value="All">All Status</option>
                 <option value="healthy">Healthy</option>
                 <option value="attention">Attention</option>
@@ -1185,9 +1210,9 @@ const DeliveryManagerDashboard = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow overflow-hidden mb-6">
-          <div className="overflow-x-auto">
-            <table className="w-full">
+        <div className="bg-white rounded-lg shadow overflow-hidden mb-4 md:mb-6">
+          <div className="overflow-x-auto custom-scrollbar -webkit-overflow-scrolling-touch">
+            <table className="w-full min-w-[800px]">
               <thead className="bg-gray-800 text-white sticky top-0 z-10">
                 <tr>
                   <th

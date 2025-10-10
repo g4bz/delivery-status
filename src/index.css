@@ -1,3 +1,175 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Mobile-First Responsive Design for iPhone 17 Pro Max and all devices */
+@layer base {
+  /* Smooth scrolling for better UX */
+  html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Prevent text size adjustment on orientation change */
+  body {
+    -webkit-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  /* Better touch targets - minimum 44x44px (Apple HIG) */
+  button, a, input[type="checkbox"], input[type="radio"], select {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+@layer utilities {
+  /* Safe area padding for notched devices (iPhone 17 Pro Max) */
+  .safe-area-inset-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .safe-area-inset-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-area-inset-left {
+    padding-left: env(safe-area-inset-left);
+  }
+
+  .safe-area-inset-right {
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Custom scrollbar for webkit browsers */
+  .custom-scrollbar::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 4px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+
+  /* Mobile-optimized touch interactions */
+  .touch-optimized {
+    -webkit-tap-highlight-color: rgba(37, 99, 235, 0.1);
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* Prevent overscroll bounce on iOS */
+  .prevent-overscroll {
+    overscroll-behavior: contain;
+  }
+
+  /* Better text rendering on mobile */
+  .mobile-text-rendering {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+}
+
+/* Mobile-specific responsive styles */
+@media (max-width: 768px) {
+  /* Reduce padding on mobile */
+  .mobile-reduce-padding {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  /* Stack grid layouts on mobile */
+  .mobile-stack {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Hide less important elements on mobile */
+  .mobile-hide {
+    display: none !important;
+  }
+
+  /* Full width on mobile */
+  .mobile-full-width {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Optimize table for horizontal scroll */
+  .mobile-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Larger text on mobile for readability */
+  .mobile-text-lg {
+    font-size: 1.125rem !important;
+  }
+
+  /* Compact spacing on mobile */
+  .mobile-compact {
+    padding: 0.5rem !important;
+  }
+}
+
+/* iPhone 17 Pro Max specific (430x932px @ 3x) */
+@media (max-width: 430px) {
+  /* Further optimize for smaller screens */
+  .text-2xl {
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+  }
+
+  .text-xl {
+    font-size: 1.125rem;
+    line-height: 1.5rem;
+  }
+
+  /* Compact stat cards */
+  .stat-card-mobile {
+    padding: 0.75rem !important;
+  }
+
+  .stat-card-mobile .text-2xl {
+    font-size: 1.5rem !important;
+  }
+}
+
+/* Landscape orientation optimizations */
+@media (max-height: 500px) and (orientation: landscape) {
+  /* Reduce vertical spacing in landscape */
+  .landscape-compact {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+
+  /* Hide large headers in landscape */
+  .landscape-hide-header {
+    display: none !important;
+  }
+}
+
+/* Dark mode support (respects system preference) */
+@media (prefers-color-scheme: dark) {
+  /* Optional: Add dark mode styles here if needed */
+}
+
+/* Reduced motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
