@@ -1,8 +1,20 @@
 import React, { useState, useMemo } from 'react';
-import { Users, TrendingUp, Building2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Users, TrendingUp, Building2, ChevronDown, ChevronUp, Calendar } from 'lucide-react';
 
 const ManagerSummary = ({ accounts, managers, statuses, satisfactionScores }) => {
   const [expandedManagers, setExpandedManagers] = useState({});
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+
+  // Generate available years
+  const availableYears = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let year = 2024; year <= currentYear + 1; year++) {
+      years.push(year);
+    }
+    return years;
+  }, []);
 
   // Group accounts by manager with statistics
   const managerGroups = useMemo(() => {
@@ -40,8 +52,14 @@ const ManagerSummary = ({ accounts, managers, statuses, satisfactionScores }) =>
       groups[managerId].accounts.push(account);
       groups[managerId].accountCount++;
 
-      // Get latest people count for this account
-      const accountStatuses = statuses.filter(s => s.accountId === account.id);
+      // Filter statuses for selected month and year
+      const accountStatuses = statuses.filter(s => {
+        if (s.accountId !== account.id) return false;
+        const statusDate = new Date(s.week);
+        return statusDate.getFullYear() === selectedYear &&
+               statusDate.getMonth() + 1 === selectedMonth;
+      });
+
       if (accountStatuses.length > 0) {
         const latestStatus = accountStatuses.reduce((latest, current) =>
           current.week > latest.week ? current : latest
@@ -54,8 +72,10 @@ const ManagerSummary = ({ accounts, managers, statuses, satisfactionScores }) =>
         else if (latestStatus.status === 'critical') groups[managerId].criticalCount++;
       }
 
-      // Calculate average satisfaction for this account
-      const accountScores = satisfactionScores.filter(s => s.accountId === account.id);
+      // Calculate average satisfaction for this account (filter by year)
+      const accountScores = satisfactionScores.filter(s =>
+        s.accountId === account.id && s.year === selectedYear
+      );
       if (accountScores.length > 0) {
         const avgScore = accountScores.reduce((sum, s) => sum + s.score, 0) / accountScores.length;
         groups[managerId].averageSatisfaction += avgScore;
@@ -80,7 +100,7 @@ const ManagerSummary = ({ accounts, managers, statuses, satisfactionScores }) =>
     return Object.values(groups)
       .filter(g => g.accountCount > 0)
       .sort((a, b) => a.manager.name.localeCompare(b.manager.name));
-  }, [accounts, managers, statuses, satisfactionScores]);
+  }, [accounts, managers, statuses, satisfactionScores, selectedYear, selectedMonth]);
 
   const toggleManager = (managerId) => {
     setExpandedManagers(prev => ({
@@ -101,6 +121,52 @@ const ManagerSummary = ({ accounts, managers, statuses, satisfactionScores }) =>
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Manager Summary</h2>
         <p className="text-gray-600">Overview of delivery managers and their account portfolios</p>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <Calendar className="w-4 h-4 inline mr-2" />
+              Year
+            </label>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+            >
+              {availableYears.map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <Calendar className="w-4 h-4 inline mr-2" />
+              Month
+            </label>
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+            >
+              <option value={1}>January</option>
+              <option value={2}>February</option>
+              <option value={3}>March</option>
+              <option value={4}>April</option>
+              <option value={5}>May</option>
+              <option value={6}>June</option>
+              <option value={7}>July</option>
+              <option value={8}>August</option>
+              <option value={9}>September</option>
+              <option value={10}>October</option>
+              <option value={11}>November</option>
+              <option value={12}>December</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       {/* Summary Cards */}

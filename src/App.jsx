@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, Edit2, CheckCircle, AlertCircle, XCircle, MessageSquare, ChevronDown, ChevronRight, Download, Save, LogOut, Bell, LayoutDashboard, TrendingUp, Users, Trash2, BarChart3 } from 'lucide-react';
+import { Plus, Edit2, CheckCircle, AlertCircle, XCircle, MessageSquare, ChevronDown, ChevronRight, Download, Save, LogOut, Bell, LayoutDashboard, TrendingUp, Users, Trash2, BarChart3, History } from 'lucide-react';
 import * as supabaseService from './supabase/supabaseService';
 import * as authService from './supabase/authService';
 import LoginPage from './components/LoginPage';
 import AccountsView from './components/AccountsView';
 import ManagerSummary from './components/ManagerSummary';
 import AccountAnalytics from './components/AccountAnalytics';
+import HistoricalData from './components/HistoricalData';
 
 // ============================================================================
 // CONSTANTS
@@ -782,6 +783,17 @@ const DeliveryManagerDashboard = () => {
               <BarChart3 className="w-4 h-4" />
               Analytics
             </button>
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+                activeTab === 'history'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <History className="w-4 h-4" />
+              Historical Data
+            </button>
           </div>
           {activeTab === 'dashboard' && (
             <div className="flex gap-2">
@@ -1165,7 +1177,30 @@ const DeliveryManagerDashboard = () => {
                       </td>
                     );
                   })}
-                  <td className="px-4 py-3"></td>
+                  <td className="px-4 py-3 bg-blue-200">
+                    <div className="text-center">
+                      <div className="text-xs text-gray-700 mb-1">Total Billing/Month</div>
+                      <span className="text-lg font-bold text-green-900">${(() => {
+                        const monthStr = `${currentMonth}-01`;
+                        return enrichedAccounts.reduce((sum, account) => {
+                          const billingRecord = billing.find(b => b.accountId === account.id && b.billingMonth === monthStr);
+                          if (billingRecord) {
+                            return sum + (billingRecord.billedAmount || 0);
+                          } else {
+                            const monthDate = new Date(monthStr);
+                            const prevMonthDate = new Date(monthDate);
+                            prevMonthDate.setMonth(prevMonthDate.getMonth() - 1);
+                            const prevMonthStr = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}-01`;
+                            const prevBilling = billing.find(b => b.accountId === account.id && b.billingMonth === prevMonthStr);
+                            if (prevBilling) {
+                              return sum + (prevBilling.billedAmount || 0);
+                            }
+                          }
+                          return sum;
+                        }, 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                      })()}</span>
+                    </div>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -1195,6 +1230,15 @@ const DeliveryManagerDashboard = () => {
             accounts={accounts}
             statuses={statuses}
             billing={billing}
+          />
+        )}
+
+        {/* Historical Data View */}
+        {activeTab === 'history' && (
+          <HistoricalData
+            actionItems={actionItems}
+            accounts={accounts}
+            statuses={statuses}
           />
         )}
 
