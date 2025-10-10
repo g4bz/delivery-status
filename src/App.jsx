@@ -1,12 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, Edit2, CheckCircle, AlertCircle, XCircle, MessageSquare, ChevronDown, ChevronRight, Download, Save, LogOut, Bell, LayoutDashboard, TrendingUp, Users, Trash2, BarChart3, History } from 'lucide-react';
+import { Plus, Edit2, CheckCircle, AlertCircle, XCircle, MessageSquare, ChevronDown, ChevronRight, Download, Save, LogOut, Bell, LayoutDashboard, TrendingUp, Users, Trash2, BarChart3 } from 'lucide-react';
 import * as supabaseService from './supabase/supabaseService';
 import * as authService from './supabase/authService';
 import LoginPage from './components/LoginPage';
 import AccountsView from './components/AccountsView';
 import ManagerSummary from './components/ManagerSummary';
 import AccountAnalytics from './components/AccountAnalytics';
-import HistoricalData from './components/HistoricalData';
 
 // ============================================================================
 // CONSTANTS
@@ -225,7 +224,9 @@ const DeliveryManagerDashboard = () => {
   const [modalData, setModalData] = useState({});
   const [filterManager, setFilterManager] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
+  // Initialize selectedWeek to null - will be set by useEffect
   const [selectedWeek, setSelectedWeek] = useState(null);
+  const [hasInitializedWeek, setHasInitializedWeek] = useState(false);
   const [showEditWeekModal, setShowEditWeekModal] = useState(false);
   const [editWeekData, setEditWeekData] = useState({ accountId: null, week: null, status: 'healthy', people: 0, notes: '' });
   const [showBillingModal, setShowBillingModal] = useState(false);
@@ -247,12 +248,41 @@ const DeliveryManagerDashboard = () => {
     return [];
   }, [selectedQuarter, viewMode]);
 
-  // Auto-select first week when month or quarter changes
+  // Auto-select current week (containing today) on mount or when weeks change
   useEffect(() => {
-    if (weeks.length > 0) {
-      setSelectedWeek(weeks[0]);
+    if (weeks.length > 0 && !hasInitializedWeek) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Reset time to midnight for accurate comparison
+
+      const currentWeek = weeks.find(week => {
+        const weekStart = new Date(week + 'T00:00:00'); // Parse as local time
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        weekEnd.setHours(23, 59, 59, 999); // End of Sunday
+
+        return today >= weekStart && today <= weekEnd;
+      });
+
+      // If current week is in the list, select it; otherwise select first week
+      setSelectedWeek(currentWeek || weeks[0]);
+      setHasInitializedWeek(true);
+    } else if (weeks.length > 0 && hasInitializedWeek && !weeks.includes(selectedWeek)) {
+      // If user changed month/quarter and selected week is not in new list, find current week again
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const currentWeek = weeks.find(week => {
+        const weekStart = new Date(week + 'T00:00:00');
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        weekEnd.setHours(23, 59, 59, 999);
+
+        return today >= weekStart && today <= weekEnd;
+      });
+
+      setSelectedWeek(currentWeek || weeks[0]);
     }
-  }, [currentMonth, selectedQuarter, viewMode]);
+  }, [weeks, hasInitializedWeek, selectedWeek]);
 
   // Initialize collapsed months for past months
   useEffect(() => {
@@ -783,17 +813,6 @@ const DeliveryManagerDashboard = () => {
               <BarChart3 className="w-4 h-4" />
               Analytics
             </button>
-            <button
-              onClick={() => setActiveTab('history')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
-                activeTab === 'history'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              <History className="w-4 h-4" />
-              Historical Data
-            </button>
           </div>
           {activeTab === 'dashboard' && (
             <div className="flex gap-2">
@@ -1211,7 +1230,12 @@ const DeliveryManagerDashboard = () => {
 
         {/* Accounts Analytics View */}
         {activeTab === 'accounts' && (
-          <AccountsView accounts={accounts} managers={managers} />
+          <AccountsView
+            accounts={accounts}
+            managers={managers}
+            actionItems={actionItems}
+            statuses={statuses}
+          />
         )}
 
         {/* Manager Summary View */}
@@ -1230,15 +1254,6 @@ const DeliveryManagerDashboard = () => {
             accounts={accounts}
             statuses={statuses}
             billing={billing}
-          />
-        )}
-
-        {/* Historical Data View */}
-        {activeTab === 'history' && (
-          <HistoricalData
-            actionItems={actionItems}
-            accounts={accounts}
-            statuses={statuses}
           />
         )}
 

@@ -2,8 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import * as supabaseService from '../supabase/supabaseService';
 import { TrendingUp, DollarSign, Calendar, MessageSquare } from 'lucide-react';
+import HistoricalData from './HistoricalData';
 
-const AccountsView = ({ accounts, managers }) => {
+const AccountsView = ({ accounts, managers, actionItems, statuses }) => {
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [satisfactionData, setSatisfactionData] = useState([]);
@@ -366,6 +367,17 @@ const AccountsView = ({ accounts, managers }) => {
           </div>
         </div>
       )}
+
+      {/* Historical Data Section - Uses same filters as account analytics above */}
+      <div className="mt-8">
+        <HistoricalData
+          actionItems={actionItems}
+          accounts={accounts}
+          statuses={statuses}
+          selectedAccount={selectedAccount}
+          selectedYear={selectedYear}
+        />
+      </div>
     </div>
   );
 };

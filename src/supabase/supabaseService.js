@@ -231,10 +231,18 @@ export const updateWeeklyStatus = async (accountId, week, status, people, notes 
       .single();
 
     if (existing) {
-      // Update existing status
+      // Update existing status - include user info when notes are updated
+      const updateData = { status, people, notes };
+
+      // If notes are being updated/added, track the user
+      if (notes && notes.trim() !== '') {
+        updateData.created_by_user_id = createdByUserId;
+        updateData.created_by_user_name = createdByUserName;
+      }
+
       const { error } = await supabase
         .from('weekly_statuses')
-        .update({ status, people, notes })
+        .update(updateData)
         .eq('account_id', accountId)
         .eq('week', week);
 
