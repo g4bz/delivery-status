@@ -1322,13 +1322,17 @@ const DeliveryManagerDashboard = () => {
                             {!collapsedMonths[monthData.month] ? (
                               monthData.weeks.map(week => {
                                 const weekData = getStatusForWeek(account.id, week);
+                                const hasNotes = weekData.notes && weekData.notes.trim().length > 0;
                                 return (
                                   <td key={week} className={'px-2 py-3 cursor-pointer ' + statusUtils.getStatusColor(weekData.status)} onClick={() => openEditWeekModal(account.id, week)}>
-                                    <div className="flex flex-col items-center justify-center">
+                                    <div className="flex flex-col items-center justify-center relative">
                                       <div onClick={(e) => handleToggleStatus(e, account.id, week)} className="hover:scale-110 transition-transform">
                                         {statusUtils.getStatusIcon(weekData.status)}
                                       </div>
                                       <span className="text-xs font-semibold mt-1 text-gray-800">{weekData.people}</span>
+                                      {hasNotes && (
+                                        <div className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full" title="Has notes"></div>
+                                      )}
                                     </div>
                                   </td>
                                 );
@@ -1344,13 +1348,17 @@ const DeliveryManagerDashboard = () => {
                         // Monthly view
                         weeks.map(week => {
                           const weekData = getStatusForWeek(account.id, week);
+                          const hasNotes = weekData.notes && weekData.notes.trim().length > 0;
                           return (
                             <td key={week} className={'px-4 py-3 cursor-pointer ' + statusUtils.getStatusColor(weekData.status)} onClick={() => openEditWeekModal(account.id, week)}>
-                              <div className="flex flex-col items-center justify-center">
+                              <div className="flex flex-col items-center justify-center relative">
                                 <div onClick={(e) => handleToggleStatus(e, account.id, week)} className="hover:scale-110 transition-transform">
                                   {statusUtils.getStatusIcon(weekData.status)}
                                 </div>
                                 <span className="text-xs font-semibold mt-1 text-gray-800">{weekData.people}</span>
+                                {hasNotes && (
+                                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full" title="Has notes"></div>
+                                )}
                               </div>
                             </td>
                           );
